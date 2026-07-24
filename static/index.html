@@ -1,0 +1,2146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HR Portal · 근태관리</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg: #EBEDEF;
+    --paper: #FFFFFF;
+    --line: #D9DCE0;
+    --ink: #1C1E22;
+    --ink-soft: #52565E;
+    --muted: #8D9198;
+    --brand: #7C5B2A;
+    --brand-2: #96713A;
+    --stamp-red: #AF3529;
+    --stamp-red-soft: #AF352922;
+    --amber: #52677D;
+    --amber-soft: #52677D1c;
+    --green: #2E6B52;
+    --green-soft: #2E6B521c;
+    --gray-soft: #8D91981c;
+    --sidebar-bg: #20242B;
+    --sat-blue: #2A5FA0;
+    --radius: 10px;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Pretendard', sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{min-height:100vh; display:flex;}
+
+  /* ---------- Login ---------- */
+  .login-wrap{
+    width:100%; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(circle at 15% 20%, #ffffff55, transparent 40%),
+      linear-gradient(180deg, var(--bg), #E3E7EE);
+    padding:24px;
+  }
+  .login-card{
+    width:100%; max-width:420px; background:var(--paper); border:1px solid var(--line);
+    border-radius:20px; padding:40px 34px; box-shadow:0 20px 50px -20px #16213e2e;
+  }
+  .login-eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.14em; color:var(--muted);
+    text-transform:uppercase; margin-bottom:6px;
+  }
+  .login-title{ font-size:26px; font-weight:800; margin:0 0 4px; letter-spacing:-.02em;}
+  .login-sub{ color:var(--ink-soft); font-size:14px; margin:0 0 28px; line-height:1.6;}
+  .field{ margin-bottom:16px; }
+  .field label{ display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px;}
+  select, input[type=text], input[type=date], textarea{
+    width:100%; padding:11px 13px; border-radius:10px; border:1.5px solid var(--line);
+    font-family:'Pretendard', sans-serif; font-size:14.5px; color:var(--ink); background:#fff;
+    outline:none; transition:border-color .15s;
+  }
+  select:focus, input:focus, textarea:focus{ border-color:var(--brand-2); }
+  .divider-or{
+    display:flex; align-items:center; gap:10px; color:var(--muted); font-size:12px; margin:22px 0 18px;
+  }
+  .divider-or::before, .divider-or::after{ content:''; flex:1; height:1px; background:var(--line); }
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    padding:11px 18px; border-radius:10px; border:none; cursor:pointer;
+    font-family:'Pretendard', sans-serif; font-weight:700; font-size:14.5px; transition:.15s;
+  }
+  .btn-primary{ background:var(--brand); color:#fff; width:100%; }
+  .btn-primary:hover{ background:var(--brand-2); }
+  .btn-ghost{ background:transparent; color:var(--brand); border:1.5px solid var(--line); width:100%;}
+  .btn-ghost:hover{ background:#f2f4f8; }
+  .btn-sm{ padding:7px 12px; font-size:13px; border-radius:8px; }
+  .btn-danger{ background:#fff; color:var(--stamp-red); border:1.5px solid var(--stamp-red); }
+  .btn-approve{ background:var(--green); color:#fff; }
+  .btn-reject{ background:#fff; color:var(--stamp-red); border:1.5px solid var(--stamp-red); }
+
+  /* ---------- Layout ---------- */
+  .sidebar{
+    width:232px; background:
+      repeating-linear-gradient(180deg, #ffffff08 0px, #ffffff08 1px, transparent 1px, transparent 28px),
+      var(--sidebar-bg);
+    color:#fff; flex-shrink:0;
+    display:flex; flex-direction:column; padding:26px 18px; position:sticky; top:0; height:100vh;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; margin-bottom:34px; padding:0 6px;}
+  .brand-mark{
+    width:32px; height:32px; border-radius:50%; border:2.5px solid var(--stamp-red);
+    display:flex; align-items:center; justify-content:center;
+    position:relative; flex-shrink:0;
+  }
+  .brand-mark::after{
+    content:''; position:absolute; inset:5px; border:1px solid var(--stamp-red); border-radius:50%;
+  }
+  .brand-name{ font-weight:800; font-size:16.5px; letter-spacing:-.01em;}
+  .brand-sub{ font-size:10.5px; color:#ffffff99; font-family:var(--mono); letter-spacing:.08em;}
+  nav.navlist{ display:flex; flex-direction:column; gap:3px; flex:1; }
+  .nav-item{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:9px;
+    color:#ffffffb0; font-size:14px; font-weight:600; cursor:pointer; transition:.12s;
+  }
+  .nav-item:hover{ background:#ffffff14; color:#fff; }
+  .nav-item.active{ background:var(--brand); color:#fff; }
+  .nav-icon{ width:18px; text-align:center; font-size:15px; }
+  .nav-badge{
+    margin-left:auto; background:var(--stamp-red); color:#fff; font-size:10.5px; font-weight:800;
+    border-radius:20px; padding:1px 7px; font-family:var(--mono);
+  }
+  .side-user{
+    border-top:1px solid #ffffff22; padding-top:14px; margin-top:10px;
+  }
+  .side-user-name{ font-weight:700; font-size:14px; }
+  .side-user-role{ font-size:11px; color:#ffffff90; margin-bottom:10px;}
+  .switch-link{ font-size:12px; color:#ffffffb0; cursor:pointer; text-decoration:underline; }
+  .switch-link:hover{ color:#fff; }
+
+  .main{ flex:1; padding:36px 44px; max-width:1180px; }
+  .page-head{ margin-bottom:26px; }
+  .page-eyebrow{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--muted); margin-bottom:6px;
+  }
+  .page-title{ font-size:25px; font-weight:800; letter-spacing:-.02em; margin:0; }
+  .page-desc{ color:var(--ink-soft); font-size:14px; margin-top:6px; }
+
+  .grid{ display:grid; gap:18px; }
+  .grid-3{ grid-template-columns:repeat(3,1fr); }
+  .grid-2{ grid-template-columns:1.3fr 1fr; }
+  @media(max-width:900px){ .grid-3,.grid-2{grid-template-columns:1fr;} }
+
+  .card{
+    background:var(--paper); border:1px solid var(--line); border-radius:var(--radius);
+    padding:22px;
+  }
+  .stat-card .stat-label{ font-size:12px; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:.06em;}
+  .stat-card .stat-value{ font-family:var(--mono); font-size:34px; font-weight:700; margin:8px 0 2px; color:var(--brand);}
+  .stat-card .stat-sub{ font-size:12.5px; color:var(--ink-soft); }
+
+  .section-title{ font-size:15px; font-weight:800; margin:0 0 14px; display:flex; align-items:center; justify-content:space-between;}
+
+  /* ---------- Request cards & stamps ---------- */
+  .req-list{ display:flex; flex-direction:column; gap:12px; }
+  .req-card{
+    border:1px solid var(--line); border-radius:12px; padding:16px 18px; position:relative;
+    display:flex; align-items:center; gap:16px; background:#fbfcfe;
+  }
+  .req-type-chip{
+    font-size:11.5px; font-weight:800; padding:4px 10px; border-radius:20px; white-space:nowrap;
+  }
+  .req-main{ flex:1; min-width:0; }
+  .req-title-row{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .req-name{ font-weight:800; font-size:14.5px; }
+  .req-dates{ font-family:var(--mono); font-size:13px; color:var(--ink-soft); }
+  .req-reason{ font-size:13px; color:var(--muted); margin-top:3px; }
+  .req-actions{ display:flex; gap:8px; flex-shrink:0; }
+
+  .stamp{
+    width:58px; height:58px; border-radius:50%; border:2.5px solid var(--stamp-red); color:var(--stamp-red);
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px;
+    transform:rotate(-14deg); flex-shrink:0; font-family:'Pretendard'; letter-spacing:-.02em;
+    position:relative;
+  }
+  .stamp::after{
+    content:''; position:absolute; inset:5px; border:1px solid var(--stamp-red); border-radius:50%;
+  }
+  .stamp.rejected{ border-color:var(--muted); color:var(--muted); }
+  .stamp.rejected::after{ border-color:var(--muted); }
+  .stamp.pending{
+    border-style:dashed; color:var(--amber); border-color:var(--amber);
+  }
+  .stamp.pending::after{ border-style:dashed; border-color:var(--amber);}
+  .stamp.info{ border-color:#3B7B7B; color:#3B7B7B; }
+  .stamp.info::after{ border-color:#3B7B7B; }
+
+  .empty{
+    text-align:center; padding:44px 20px; color:var(--muted); font-size:13.5px;
+  }
+  .empty-icon{ font-size:30px; margin-bottom:10px; }
+
+  /* ---------- Calendar ---------- */
+  .cal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;}
+  .cal-nav{ display:flex; align-items:center; gap:10px; }
+  .cal-month{ font-weight:800; font-size:17px; font-family:var(--mono); min-width:120px; text-align:center;}
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
+  .cal-dow{ text-align:center; font-size:11.5px; color:var(--muted); font-weight:700; padding-bottom:6px;}
+  .cal-cell{
+    min-height:88px; border-radius:10px; border:1px solid var(--line); padding:6px; background:#fbfcfe;
+    display:flex; flex-direction:column; gap:3px; transition:.12s;
+  }
+  .cal-cell:hover{ border-color:var(--brand-2); box-shadow:0 4px 12px -4px #0002; transform:translateY(-1px); }
+  .cal-cell.other-month{ opacity:.35; }
+  .cal-cell.today{ border-color:var(--brand-2); box-shadow:inset 0 0 0 1px var(--brand-2); }
+  .cal-daynum{ font-family:var(--mono); font-size:12px; color:var(--ink-soft); font-weight:600; }
+  .cal-tag{
+    font-size:10px; font-weight:700; padding:2px 5px; border-radius:5px; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap;
+  }
+  .legend{ display:flex; gap:14px; flex-wrap:wrap; margin-top:16px; }
+  .legend-item{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft);}
+  .legend-dot{ width:9px; height:9px; border-radius:3px; }
+
+  /* ---------- Form ---------- */
+  .form-card{ max-width:560px; }
+  .type-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:18px;}
+  .type-opt{
+    border:1.5px solid var(--line); border-radius:10px; padding:12px 8px; text-align:center; cursor:pointer;
+    font-size:12.5px; font-weight:700; transition:.12s; color:var(--ink-soft);
+  }
+  .type-opt:hover{ border-color:var(--brand-2); }
+  .type-opt.selected{ border-color:var(--brand); background:var(--brand); color:#fff; }
+  .row-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .half-toggle{ display:flex; gap:8px; margin-top:8px; }
+  .half-opt{
+    flex:1; text-align:center; padding:9px; border-radius:9px; border:1.5px solid var(--line);
+    font-size:13px; font-weight:700; cursor:pointer; color:var(--ink-soft);
+  }
+  .half-opt.selected{ background:var(--brand); border-color:var(--brand); color:#fff; }
+  .hint{ font-size:12px; color:var(--muted); margin-top:6px; }
+
+  /* ---------- Members table ---------- */
+  table.members{ width:100%; border-collapse:collapse; }
+  table.members th{
+    text-align:left; font-size:11.5px; color:var(--muted); font-weight:700; text-transform:uppercase;
+    letter-spacing:.04em; padding:8px 10px; border-bottom:1.5px solid var(--line);
+  }
+  table.members td{ padding:11px 10px; border-bottom:1px solid var(--line); font-size:13.5px; }
+  .role-pill{ font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; }
+  .toggle-btn{
+    font-size:12px; padding:5px 10px; border-radius:7px; border:1.5px solid var(--line); background:#fff;
+    cursor:pointer; font-weight:700; color:var(--ink-soft);
+  }
+  .toggle-btn.on{ background:var(--brand); border-color:var(--brand); color:#fff; }
+  input.balance-input{ width:64px; font-family:var(--mono); text-align:center; padding:5px; }
+
+  .toast{
+    position:fixed; bottom:26px; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:#fff; padding:11px 20px; border-radius:10px; font-size:13.5px;
+    font-weight:600; opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; z-index:50;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(-6px); }
+
+  /* ---------- Mobile top bar (hidden on desktop) ---------- */
+  .mobile-topbar{ display:none; }
+
+  /* ---------- Blocking modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:#12141866; display:flex; align-items:center; justify-content:center;
+    z-index:200; padding:20px;
+  }
+  .modal-box{
+    background:var(--paper); border-radius:16px; padding:30px 26px; max-width:320px; width:100%;
+    text-align:center; box-shadow:0 30px 60px -20px #00000055;
+  }
+  .modal-stamp{
+    width:52px; height:52px; border-radius:50%; border:2.5px solid var(--stamp-red); color:var(--stamp-red);
+    display:flex; align-items:center; justify-content:center; margin:0 auto 16px; font-size:20px; font-weight:800;
+    position:relative;
+  }
+  .modal-stamp::after{ content:''; position:absolute; inset:4px; border:1px solid var(--stamp-red); border-radius:50%; }
+  .modal-title{ font-weight:800; font-size:16.5px; margin-bottom:8px; }
+  .modal-msg{ font-size:13.5px; color:var(--ink-soft); line-height:1.7; margin-bottom:20px; }
+
+  /* ---------- Responsive (mobile) ---------- */
+  @media (max-width: 760px){
+    #app{ flex-direction:column; }
+    .login-wrap{ padding:16px; }
+    .login-card{ padding:28px 22px; border-radius:16px; }
+
+    .mobile-topbar{
+      display:flex; align-items:center; justify-content:space-between;
+      background:var(--sidebar-bg); color:#fff; padding:12px 16px;
+      position:sticky; top:0; z-index:55;
+    }
+    .mt-brand{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:14.5px; }
+    .mt-user{ display:flex; align-items:center; gap:10px; font-size:12.5px; }
+    .mt-user .switch-link{ color:#ffffffcc; font-size:11.5px; }
+
+    .sidebar{
+      position:fixed; bottom:0; left:0; right:0; top:auto; height:auto; width:100%;
+      flex-direction:row; padding:6px 4px; gap:0; z-index:60;
+      box-shadow:0 -8px 24px #0003; overflow-x:auto;
+    }
+    .sidebar .brand, .sidebar .side-user{ display:none; }
+    nav.navlist{ flex-direction:row; flex:1; gap:2px; }
+    .nav-item{
+      flex-direction:column; gap:2px; padding:7px 8px; font-size:10px; white-space:nowrap;
+      border-radius:10px; flex:1; align-items:center; justify-content:center; position:relative;
+    }
+    .nav-icon{ font-size:17px; }
+    .nav-badge{ position:absolute; top:2px; right:10px; padding:0 5px; }
+
+    .main{ padding:18px 14px 90px; max-width:100%; }
+    .page-title{ font-size:20px; }
+    .page-desc{ font-size:13px; }
+    .grid-3, .grid-2{ grid-template-columns:1fr; }
+    .stat-card .stat-value{ font-size:28px; }
+
+    .req-card{ flex-wrap:wrap; gap:10px; }
+    .req-actions{ width:100%; }
+    .req-actions .btn{ flex:1; }
+    .stamp{ width:44px; height:44px; font-size:11px; }
+
+    .cal-cell{ min-height:58px; padding:4px; }
+    .cal-tag{ font-size:9px; padding:1px 4px; }
+    .cal-month{ font-size:14.5px; min-width:90px; }
+
+    table.members{ display:block; overflow-x:auto; white-space:nowrap; }
+
+    .type-grid{ grid-template-columns:repeat(3,1fr); gap:6px; }
+    .type-opt{ font-size:11.5px; padding:10px 4px; }
+    .row-2{ grid-template-columns:1fr 1fr; gap:8px; }
+  }
+
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== Flask 백엔드 연동용 저장소 shim =====
+// shared=true 인 데이터(회사 전체 근태 데이터)는 서버(Postgres)에 저장해서 모두가 공유한다.
+// shared=false 인 데이터("이 브라우저에서 마지막으로 로그인한 사람" 같은 개인 편의용 정보)는
+// 서버까지 갈 필요 없이 이 브라우저의 localStorage에만 저장한다.
+if(!window.storage){
+  const LOCAL_PREFIX = 'hrportal-local:';
+  window.storage = {
+    async get(key, shared){
+      if(!shared){
+        const raw = localStorage.getItem(LOCAL_PREFIX + key);
+        if(raw === null){ throw new Error('key not found: ' + key); }
+        return { key, value: raw, shared: false };
+      }
+      const res = await fetch('/api/storage/' + encodeURIComponent(key));
+      if(res.status === 404){ throw new Error('key not found: ' + key); }
+      if(!res.ok){ throw new Error('storage get failed: ' + res.status); }
+      const data = await res.json();
+      return { key, value: data.value, shared: true };
+    },
+    async set(key, value, shared){
+      if(!shared){
+        localStorage.setItem(LOCAL_PREFIX + key, value);
+        return { key, value, shared: false };
+      }
+      const res = await fetch('/api/storage/' + encodeURIComponent(key), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value })
+      });
+      if(!res.ok){ throw new Error('storage set failed: ' + res.status); }
+      const data = await res.json();
+      return { key, value: data.value, shared: true };
+    },
+    async delete(key, shared){
+      if(!shared){
+        const existed = localStorage.getItem(LOCAL_PREFIX + key) !== null;
+        localStorage.removeItem(LOCAL_PREFIX + key);
+        return { key, deleted: existed, shared: false };
+      }
+      const res = await fetch('/api/storage/' + encodeURIComponent(key), { method: 'DELETE' });
+      const data = await res.json();
+      return { key, deleted: data.deleted, shared: true };
+    },
+    async list(prefix, shared){
+      if(!shared){
+        const full = LOCAL_PREFIX + (prefix || '');
+        const keys = Object.keys(localStorage).filter(k=>k.startsWith(full)).map(k=>k.slice(LOCAL_PREFIX.length));
+        return { keys, prefix, shared: false };
+      }
+      const res = await fetch('/api/storage?prefix=' + encodeURIComponent(prefix || ''));
+      const data = await res.json();
+      return { keys: data.keys, prefix, shared: true };
+    }
+  };
+}
+
+const SHARED_KEY = 'company-data-v1';
+const PERSONAL_KEY = 'my-identity-v1';
+
+const LEAVE_TYPES = {
+  annual:   { label:'연차',      icon:'🏖️', deduct:true,  color:'#223A63', soft:'#223A6318', range:true  },
+  half:     { label:'반차',      icon:'🌗', deduct:true,  color:'#34517E', soft:'#34517E18', range:false },
+  reserve:  { label:'예비군훈련', icon:'🪖', deduct:false, color:'#2E7D5B', soft:'#2E7D5B18', range:true  },
+  sick:     { label:'병가',      icon:'🩹', deduct:false, color:'#B23B30', soft:'#B23B3018', range:true  },
+  family:   { label:'경조휴가',  icon:'🎗️', deduct:false, color:'#C4901F', soft:'#C4901F18', range:false },
+  overtime: { label:'연장근무',  icon:'⏰', deduct:false, color:'#5C4A8A', soft:'#5C4A8A18', range:false },
+  busytrip: { label:'출장',      icon:'✈️', deduct:false, color:'#3B7B7B', soft:'#3B7B7B18', range:true, noApproval:true },
+  etc:      { label:'기타',      icon:'📌', deduct:false, color:'#8A93A6', soft:'#8A93A618', range:true  },
+};
+const FAMILY_SUBTYPES = {
+  parent:              { label:'부모상/처가부모상', days:5 },
+  marriage:            { label:'본인결혼',         days:5 },
+  grandparent:         { label:'조부모상(친/외)',   days:3 },
+  spouse_grandparent:  { label:'처가조부모상',      days:3 },
+};
+// 날짜가 겹치면 안 되는(하루를 실제로 차지하는) 유형들
+const BLOCKING_TYPES = ['annual', 'half', 'family', 'busytrip'];
+function findDateConflict(employeeId, startDate, endDate){
+  return state.data.requests.find(r=>
+    r.employeeId===employeeId &&
+    r.status!=='rejected' && r.status!=='cancelled' &&
+    BLOCKING_TYPES.includes(r.type) &&
+    !(endDate < r.startDate || startDate > r.endDate)
+  );
+}
+
+const DEFAULT_HOLIDAYS_2026 = [
+  { date:'2026-01-01', label:'신정' },
+  { date:'2026-02-16', label:'설날 연휴' },
+  { date:'2026-02-17', label:'설날' },
+  { date:'2026-02-18', label:'설날 연휴' },
+  { date:'2026-03-01', label:'삼일절' },
+  { date:'2026-03-02', label:'대체공휴일(삼일절)' },
+  { date:'2026-05-05', label:'어린이날' },
+  { date:'2026-05-24', label:'부처님오신날' },
+  { date:'2026-05-25', label:'대체공휴일(부처님오신날)' },
+  { date:'2026-06-06', label:'현충일' },
+  { date:'2026-07-17', label:'제헌절' },
+  { date:'2026-08-15', label:'광복절' },
+  { date:'2026-08-17', label:'대체공휴일(광복절)' },
+  { date:'2026-09-24', label:'추석 연휴' },
+  { date:'2026-09-25', label:'추석' },
+  { date:'2026-09-26', label:'추석 연휴' },
+  { date:'2026-10-03', label:'개천절' },
+  { date:'2026-10-05', label:'대체공휴일(개천절)' },
+  { date:'2026-10-09', label:'한글날' },
+  { date:'2026-12-25', label:'크리스마스' },
+];
+
+const LEADER_POSITIONS = ['팀장', '지점장', '부사장'];
+const DEFAULT_PASSWORD = 'dmbrg';
+const ORG_VERSION = 3; // 조직도가 바뀌면 이 값을 올려서 자동 재시딩
+
+const SEED_EMPLOYEES = [
+  { empNo:'09', name:'이동원',    team:'본사',       position:'대표이사', annualTotal:0, isAdmin:true },
+  { empNo:'21', name:'허재관',    team:'본사',       position:'부사장', annualTotal:22 },
+  { empNo:'41', name:'심대흥',    team:'본사영업부',  position:'팀원',  annualTotal:16 },
+  { empNo:'33', name:'신상무',    team:'서울지점',    position:'지점장', annualTotal:19 },
+  { empNo:'10', name:'정나은',    team:'영업지원팀',  position:'팀장',  annualTotal:25, isHrApprover:true, isAdmin:true },
+  { empNo:'54', name:'구현',      team:'물류팀',      position:'팀장',  annualTotal:18 },
+  { empNo:'05',  name:'김남홍',    team:'영업지원팀',  position:'팀원',  annualTotal:25, isFullViewer:true },
+  { empNo:'13', name:'김성준YB',  team:'본사영업부',  position:'팀장',  annualTotal:24 },
+  { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true },
+  { empNo:'26', name:'정태건',    team:'FA시스템팀',  position:'팀장',  annualTotal:18 },
+  { empNo:'16', name:'강현동',    team:'물류팀',      position:'팀원',  annualTotal:23 },
+  { empNo:'23', name:'여승현',    team:'물류팀',      position:'팀원',  annualTotal:21 },
+  { empNo:'50', name:'최치현',    team:'디엠비툴',    position:'팀장',  annualTotal:11 },
+  { empNo:'25', name:'임준목',    team:'본사영업부',  position:'팀원',  annualTotal:21 },
+  { empNo:'20', name:'백지완',    team:'물류팀',      position:'팀원',  annualTotal:16 },
+  { empNo:'57', name:'김태원',    team:'물류팀',      position:'팀원',  annualTotal:18 },
+  { empNo:'48', name:'조현습',    team:'본사영업부',  position:'팀원',  annualTotal:18 },
+  { empNo:'19', name:'박지수',    team:'본사영업부',  position:'팀원',  annualTotal:21 },
+  { empNo:'43', name:'천이택',    team:'본사영업부',  position:'팀원',  annualTotal:19 },
+  { empNo:'01',  name:'양민우',    team:'FA시스템팀',  position:'팀원',  annualTotal:16 },
+  { empNo:'06',  name:'차훈석',    team:'영업지원팀',  position:'팀원',  annualTotal:17 },
+  { empNo:'14', name:'박주형',    team:'물류팀',      position:'팀원',  annualTotal:16 },
+  { empNo:'32', name:'조상호',    team:'물류팀',      position:'팀원',  annualTotal:20 },
+  { empNo:'58', name:'김가림',    team:'본사영업부',  position:'팀원',  annualTotal:18 },
+  { empNo:'38', name:'박찬호',    team:'디엠비툴',    position:'팀원',  annualTotal:12 },
+  { empNo:'35', name:'서주영',    team:'영업지원팀',  position:'팀원',  annualTotal:17 },
+  { empNo:'49', name:'김석한',    team:'물류팀',      position:'팀원',  annualTotal:18 },
+  { empNo:'31', name:'정하연',    team:'서울지점',    position:'팀원',  annualTotal:20 },
+  { empNo:'07',  name:'김규태',    team:'본사영업부',  position:'팀원',  annualTotal:16 },
+  { empNo:'17', name:'안은주',    team:'영업지원팀',  position:'팀원',  annualTotal:16 },
+  { empNo:'04',  name:'김지운',    team:'물류팀',      position:'팀원',  annualTotal:8  },
+  { empNo:'45', name:'김성준OB',  team:'대구지점',    position:'지점장', annualTotal:15 },
+  { empNo:'08',  name:'최인철',    team:'대구지점',    position:'팀원',  annualTotal:20 },
+  { empNo:'34', name:'이영준',    team:'대구지점',    position:'팀원',  annualTotal:19 },
+  { empNo:'27', name:'김규동',    team:'대구지점',    position:'팀원',  annualTotal:18 },
+];
+
+const IMPORTED_LEAVE_BATCH_1 = [
+  {empNo:"01", type:"annual", startDate:"2026-11-19", endDate:"2026-11-19", days:1},
+  {empNo:"01", type:"annual", startDate:"2025-12-26", endDate:"2025-12-26", days:1},
+  {empNo:"01", type:"annual", startDate:"2026-02-27", endDate:"2026-02-27", days:1},
+  {empNo:"01", type:"annual", startDate:"2026-05-12", endDate:"2026-05-12", days:1},
+  {empNo:"01", type:"annual", startDate:"2026-06-12", endDate:"2026-06-12", days:1},
+  {empNo:"01", type:"annual", startDate:"2026-06-15", endDate:"2026-06-15", days:1},
+  {empNo:"01", type:"annual", startDate:"2026-06-16", endDate:"2026-06-16", days:1},
+  {empNo:"01", type:"annual", startDate:"2026-06-22", endDate:"2026-06-22", days:1},
+  {empNo:"01", type:"annual", startDate:"2026-06-23", endDate:"2026-06-23", days:1},
+  {empNo:"01", type:"annual", startDate:"2026-07-20", endDate:"2026-07-20", days:1},
+  {empNo:"01", type:"half", startDate:"2026-02-10", endDate:"2026-02-10", days:0.5, halfType:"am"},
+  {empNo:"04", type:"annual", startDate:"2026-07-15", endDate:"2026-07-15", days:1},
+  {empNo:"05", type:"annual", startDate:"2026-02-12", endDate:"2026-02-12", days:1},
+  {empNo:"06", type:"annual", startDate:"2026-01-12", endDate:"2026-01-12", days:1},
+  {empNo:"06", type:"annual", startDate:"2026-04-27", endDate:"2026-04-27", days:1},
+  {empNo:"06", type:"annual", startDate:"2026-05-22", endDate:"2026-05-22", days:1},
+  {empNo:"06", type:"annual", startDate:"2026-05-26", endDate:"2026-05-26", days:1},
+  {empNo:"06", type:"annual", startDate:"2026-07-28", endDate:"2026-07-28", days:1},
+  {empNo:"06", type:"annual", startDate:"2026-09-11", endDate:"2026-09-11", days:1},
+  {empNo:"06", type:"annual", startDate:"2026-09-14", endDate:"2026-09-14", days:1},
+  {empNo:"07", type:"annual", startDate:"2026-01-16", endDate:"2026-01-16", days:1},
+  {empNo:"07", type:"annual", startDate:"2026-03-16", endDate:"2026-03-16", days:1},
+  {empNo:"07", type:"annual", startDate:"2026-06-18", endDate:"2026-06-18", days:1},
+  {empNo:"07", type:"annual", startDate:"2026-06-19", endDate:"2026-06-19", days:1},
+  {empNo:"08", type:"annual", startDate:"2026-02-09", endDate:"2026-02-09", days:1},
+  {empNo:"08", type:"annual", startDate:"2026-05-04", endDate:"2026-05-04", days:1},
+  {empNo:"08", type:"annual", startDate:"2026-07-20", endDate:"2026-07-20", days:1},
+  {empNo:"08", type:"half", startDate:"2026-05-13", endDate:"2026-05-13", days:0.5, halfType:"am"},
+  {empNo:"10", type:"half", startDate:"2026-06-19", endDate:"2026-06-19", days:0.5, halfType:"am"},
+  {empNo:"13", type:"half", startDate:"2026-01-02", endDate:"2026-01-02", days:0.5, halfType:"am"},
+  {empNo:"13", type:"half", startDate:"2026-02-24", endDate:"2026-02-24", days:0.5, halfType:"am"},
+  {empNo:"13", type:"half", startDate:"2026-07-09", endDate:"2026-07-09", days:0.5, halfType:"am"},
+  {empNo:"14", type:"annual", startDate:"2026-02-20", endDate:"2026-02-20", days:1},
+  {empNo:"14", type:"annual", startDate:"2026-02-23", endDate:"2026-02-23", days:1},
+  {empNo:"14", type:"annual", startDate:"2026-03-16", endDate:"2026-03-16", days:1},
+  {empNo:"14", type:"annual", startDate:"2026-04-16", endDate:"2026-04-16", days:1},
+  {empNo:"14", type:"half", startDate:"2026-05-15", endDate:"2026-05-15", days:0.5, halfType:"am"},
+  {empNo:"16", type:"annual", startDate:"2026-02-10", endDate:"2026-02-10", days:1},
+  {empNo:"16", type:"half", startDate:"2026-05-22", endDate:"2026-05-22", days:0.5, halfType:"am"},
+  {empNo:"16", type:"half", startDate:"2026-06-26", endDate:"2026-06-26", days:0.5, halfType:"am"},
+  {empNo:"17", type:"annual", startDate:"2026-01-23", endDate:"2026-01-23", days:1},
+  {empNo:"17", type:"annual", startDate:"2026-07-22", endDate:"2026-07-22", days:1},
+  {empNo:"17", type:"half", startDate:"2026-04-22", endDate:"2026-04-22", days:0.5, halfType:"am"},
+  {empNo:"17", type:"half", startDate:"2026-07-23", endDate:"2026-07-23", days:0.25, halfType:"split", splitStart:13, splitEnd:15},
+  {empNo:"19", type:"annual", startDate:"2026-05-04", endDate:"2026-05-04", days:1},
+  {empNo:"19", type:"annual", startDate:"2026-06-12", endDate:"2026-06-12", days:1},
+  {empNo:"19", type:"annual", startDate:"2026-07-03", endDate:"2026-07-03", days:1},
+  {empNo:"19", type:"annual", startDate:"2026-07-13", endDate:"2026-07-13", days:1},
+  {empNo:"20", type:"annual", startDate:"2026-03-27", endDate:"2026-03-27", days:1},
+  {empNo:"20", type:"annual", startDate:"2026-03-30", endDate:"2026-03-30", days:1},
+  {empNo:"20", type:"annual", startDate:"2026-03-31", endDate:"2026-03-31", days:1},
+  {empNo:"20", type:"annual", startDate:"2026-04-30", endDate:"2026-04-30", days:1},
+  {empNo:"20", type:"annual", startDate:"2026-07-31", endDate:"2026-07-31", days:1},
+  {empNo:"20", type:"half", startDate:"2026-01-30", endDate:"2026-01-30", days:0.5, halfType:"am"},
+  {empNo:"23", type:"annual", startDate:"2026-01-02", endDate:"2026-01-02", days:1},
+  {empNo:"23", type:"annual", startDate:"2026-02-24", endDate:"2026-02-24", days:1},
+  {empNo:"23", type:"annual", startDate:"2026-04-27", endDate:"2026-04-27", days:1},
+  {empNo:"23", type:"annual", startDate:"2026-05-21", endDate:"2026-05-21", days:1},
+  {empNo:"23", type:"annual", startDate:"2026-07-13", endDate:"2026-07-13", days:1},
+  {empNo:"25", type:"annual", startDate:"2026-04-28", endDate:"2026-04-28", days:1},
+  {empNo:"25", type:"half", startDate:"2026-03-04", endDate:"2026-03-04", days:0.5, halfType:"am"},
+  {empNo:"26", type:"annual", startDate:"2025-12-26", endDate:"2025-12-26", days:1},
+  {empNo:"26", type:"annual", startDate:"2026-01-02", endDate:"2026-01-02", days:1},
+  {empNo:"26", type:"annual", startDate:"2026-04-06", endDate:"2026-04-06", days:1},
+  {empNo:"26", type:"annual", startDate:"2026-04-07", endDate:"2026-04-07", days:1},
+  {empNo:"26", type:"annual", startDate:"2026-05-04", endDate:"2026-05-04", days:1},
+  {empNo:"26", type:"annual", startDate:"2026-05-11", endDate:"2026-05-11", days:1},
+  {empNo:"26", type:"annual", startDate:"2026-06-11", endDate:"2026-06-11", days:1},
+  {empNo:"26", type:"annual", startDate:"2026-06-12", endDate:"2026-06-12", days:1},
+  {empNo:"26", type:"half", startDate:"2026-03-18", endDate:"2026-03-18", days:0.5, halfType:"am"},
+  {empNo:"27", type:"annual", startDate:"2025-12-26", endDate:"2025-12-26", days:1},
+  {empNo:"27", type:"annual", startDate:"2026-02-02", endDate:"2026-02-02", days:1},
+  {empNo:"27", type:"annual", startDate:"2026-02-03", endDate:"2026-02-03", days:1},
+  {empNo:"27", type:"annual", startDate:"2026-06-08", endDate:"2026-06-08", days:1},
+  {empNo:"27", type:"annual", startDate:"2026-06-09", endDate:"2026-06-09", days:1},
+  {empNo:"27", type:"annual", startDate:"2026-06-10", endDate:"2026-06-10", days:1},
+  {empNo:"27", type:"annual", startDate:"2026-06-11", endDate:"2026-06-11", days:1},
+  {empNo:"27", type:"annual", startDate:"2026-06-12", endDate:"2026-06-12", days:1},
+  {empNo:"31", type:"annual", startDate:"2026-01-15", endDate:"2026-01-15", days:1},
+  {empNo:"31", type:"annual", startDate:"2026-01-16", endDate:"2026-01-16", days:1},
+  {empNo:"31", type:"annual", startDate:"2026-02-09", endDate:"2026-02-09", days:1},
+  {empNo:"31", type:"half", startDate:"2026-01-30", endDate:"2026-01-30", days:0.5, halfType:"am"},
+  {empNo:"31", type:"half", startDate:"2026-02-27", endDate:"2026-02-27", days:0.5, halfType:"am"},
+  {empNo:"32", type:"annual", startDate:"2026-01-16", endDate:"2026-01-16", days:1},
+  {empNo:"32", type:"annual", startDate:"2026-01-19", endDate:"2026-01-19", days:1},
+  {empNo:"32", type:"annual", startDate:"2026-05-08", endDate:"2026-05-08", days:1},
+  {empNo:"32", type:"annual", startDate:"2026-05-11", endDate:"2026-05-11", days:1},
+  {empNo:"32", type:"annual", startDate:"2026-07-06", endDate:"2026-07-06", days:1},
+  {empNo:"32", type:"half", startDate:"2026-07-22", endDate:"2026-07-22", days:0.5, halfType:"am"},
+  {empNo:"33", type:"annual", startDate:"2026-01-23", endDate:"2026-01-23", days:1},
+  {empNo:"34", type:"annual", startDate:"2026-04-17", endDate:"2026-04-17", days:1},
+  {empNo:"34", type:"annual", startDate:"2026-05-11", endDate:"2026-05-11", days:1},
+  {empNo:"34", type:"half", startDate:"2026-04-16", endDate:"2026-04-16", days:0.5, halfType:"am"},
+  {empNo:"34", type:"half", startDate:"2026-07-08", endDate:"2026-07-08", days:0.5, halfType:"am"},
+  {empNo:"35", type:"annual", startDate:"2026-01-19", endDate:"2026-01-19", days:1},
+  {empNo:"35", type:"annual", startDate:"2026-01-20", endDate:"2026-01-20", days:1},
+  {empNo:"35", type:"annual", startDate:"2026-02-23", endDate:"2026-02-23", days:1},
+  {empNo:"35", type:"annual", startDate:"2026-02-24", endDate:"2026-02-24", days:1},
+  {empNo:"35", type:"annual", startDate:"2026-03-13", endDate:"2026-03-13", days:1},
+  {empNo:"35", type:"annual", startDate:"2026-03-16", endDate:"2026-03-16", days:1},
+  {empNo:"35", type:"annual", startDate:"2026-08-03", endDate:"2026-08-03", days:1},
+  {empNo:"35", type:"half", startDate:"2026-03-25", endDate:"2026-03-25", days:0.5, halfType:"am"},
+  {empNo:"38", type:"annual", startDate:"2026-01-02", endDate:"2026-01-02", days:1},
+  {empNo:"38", type:"annual", startDate:"2026-03-09", endDate:"2026-03-09", days:1},
+  {empNo:"38", type:"annual", startDate:"2026-03-10", endDate:"2026-03-10", days:1},
+  {empNo:"38", type:"annual", startDate:"2026-03-11", endDate:"2026-03-11", days:1},
+  {empNo:"38", type:"annual", startDate:"2026-05-04", endDate:"2026-05-04", days:1},
+  {empNo:"38", type:"annual", startDate:"2026-06-11", endDate:"2026-06-11", days:1},
+  {empNo:"38", type:"annual", startDate:"2026-07-10", endDate:"2026-07-10", days:1},
+  {empNo:"38", type:"annual", startDate:"2026-07-13", endDate:"2026-07-13", days:1},
+  {empNo:"38", type:"half", startDate:"2026-02-11", endDate:"2026-02-11", days:0.5, halfType:"am"},
+  {empNo:"38", type:"half", startDate:"2026-03-06", endDate:"2026-03-06", days:0.5, halfType:"am"},
+  {empNo:"38", type:"half", startDate:"2026-05-11", endDate:"2026-05-11", days:0.5, halfType:"am"},
+  {empNo:"40", type:"annual", startDate:"2026-03-19", endDate:"2026-03-19", days:1},
+  {empNo:"40", type:"annual", startDate:"2026-05-08", endDate:"2026-05-08", days:1},
+  {empNo:"40", type:"annual", startDate:"2026-07-10", endDate:"2026-07-10", days:1},
+  {empNo:"40", type:"half", startDate:"2026-01-09", endDate:"2026-01-09", days:0.5, halfType:"am"},
+  {empNo:"40", type:"half", startDate:"2026-02-05", endDate:"2026-02-05", days:0.5, halfType:"am"},
+  {empNo:"40", type:"half", startDate:"2026-04-08", endDate:"2026-04-08", days:0.5, halfType:"am"},
+  {empNo:"40", type:"half", startDate:"2026-05-20", endDate:"2026-05-20", days:0.5, halfType:"am"},
+  {empNo:"41", type:"annual", startDate:"2026-01-02", endDate:"2026-01-02", days:1},
+  {empNo:"41", type:"annual", startDate:"2026-08-03", endDate:"2026-08-03", days:1},
+  {empNo:"41", type:"annual", startDate:"2026-08-04", endDate:"2026-08-04", days:1},
+  {empNo:"43", type:"annual", startDate:"2026-01-09", endDate:"2026-01-09", days:1},
+  {empNo:"43", type:"annual", startDate:"2026-01-22", endDate:"2026-01-22", days:1},
+  {empNo:"43", type:"annual", startDate:"2026-04-23", endDate:"2026-04-23", days:1},
+  {empNo:"43", type:"annual", startDate:"2026-04-24", endDate:"2026-04-24", days:1},
+  {empNo:"43", type:"annual", startDate:"2026-06-12", endDate:"2026-06-12", days:1},
+  {empNo:"43", type:"annual", startDate:"2026-07-03", endDate:"2026-07-03", days:1},
+  {empNo:"43", type:"annual", startDate:"2026-08-14", endDate:"2026-08-14", days:1},
+  {empNo:"48", type:"annual", startDate:"2026-05-26", endDate:"2026-05-26", days:1},
+  {empNo:"48", type:"annual", startDate:"2026-07-20", endDate:"2026-07-20", days:1},
+  {empNo:"49", type:"annual", startDate:"2026-01-23", endDate:"2026-01-23", days:1},
+  {empNo:"49", type:"annual", startDate:"2026-03-09", endDate:"2026-03-09", days:1},
+  {empNo:"49", type:"annual", startDate:"2026-03-10", endDate:"2026-03-10", days:1},
+  {empNo:"49", type:"annual", startDate:"2026-04-27", endDate:"2026-04-27", days:1},
+  {empNo:"49", type:"annual", startDate:"2026-06-11", endDate:"2026-06-11", days:1},
+  {empNo:"49", type:"annual", startDate:"2026-06-12", endDate:"2026-06-12", days:1},
+  {empNo:"49", type:"annual", startDate:"2026-07-20", endDate:"2026-07-20", days:1},
+  {empNo:"49", type:"half", startDate:"2026-04-23", endDate:"2026-04-23", days:0.5, halfType:"am"},
+  {empNo:"50", type:"annual", startDate:"2026-01-09", endDate:"2026-01-09", days:1},
+  {empNo:"50", type:"annual", startDate:"2026-02-20", endDate:"2026-02-20", days:1},
+  {empNo:"50", type:"annual", startDate:"2026-03-23", endDate:"2026-03-23", days:1},
+  {empNo:"50", type:"annual", startDate:"2026-03-24", endDate:"2026-03-24", days:1},
+  {empNo:"50", type:"annual", startDate:"2026-04-30", endDate:"2026-04-30", days:1},
+  {empNo:"50", type:"annual", startDate:"2026-07-16", endDate:"2026-07-16", days:1},
+  {empNo:"50", type:"half", startDate:"2026-02-06", endDate:"2026-02-06", days:0.5, halfType:"am"},
+  {empNo:"50", type:"half", startDate:"2026-05-15", endDate:"2026-05-15", days:0.5, halfType:"am"},
+  {empNo:"50", type:"half", startDate:"2026-06-22", endDate:"2026-06-22", days:0.5, halfType:"am"},
+  {empNo:"54", type:"annual", startDate:"2026-01-19", endDate:"2026-01-19", days:1},
+  {empNo:"54", type:"annual", startDate:"2026-01-20", endDate:"2026-01-20", days:1},
+  {empNo:"54", type:"half", startDate:"2026-03-18", endDate:"2026-03-18", days:0.5, halfType:"am"},
+  {empNo:"54", type:"half", startDate:"2026-04-08", endDate:"2026-04-08", days:0.5, halfType:"am"},
+  {empNo:"54", type:"half", startDate:"2026-05-29", endDate:"2026-05-29", days:0.5, halfType:"am"},
+  {empNo:"54", type:"half", startDate:"2026-06-08", endDate:"2026-06-08", days:0.5, halfType:"am"},
+  {empNo:"57", type:"annual", startDate:"2026-01-02", endDate:"2026-01-02", days:1},
+  {empNo:"58", type:"annual", startDate:"2026-01-16", endDate:"2026-01-16", days:1},
+  {empNo:"58", type:"annual", startDate:"2026-01-19", endDate:"2026-01-19", days:1},
+  {empNo:"58", type:"annual", startDate:"2026-05-22", endDate:"2026-05-22", days:1},
+  {empNo:"58", type:"half", startDate:"2025-12-26", endDate:"2025-12-26", days:0.5, halfType:"am"},
+  {empNo:"58", type:"half", startDate:"2026-07-31", endDate:"2026-07-31", days:0.25, halfType:"split", splitStart:13, splitEnd:15}
+];
+
+let state = {
+  data: null,        // { employees:[], requests:[] }
+  me: null,          // employee object
+  view: 'dashboard',
+  calMonth: new Date().getMonth(),
+  calYear: new Date().getFullYear(),
+  formType: 'annual',
+  formHalf: 'am',
+  splitStart: 12,
+  splitEnd: 13,
+  otStart: '18:00',
+  otEnd: '20:00',
+  formFamilySub: 'parent',
+};
+
+function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function todayStr(){ const d=new Date(); return fmtDate(d); }
+function minAllowedDateStr(){ const d=new Date(); d.setDate(d.getDate()-10); return fmtDate(d); }
+function hourOptions(){
+  let opts = '';
+  for(let h=0; h<24; h++){ opts += `<option value="${h}">${String(h).padStart(2,'0')}:00</option>`; }
+  return opts;
+}
+function halfHourOptions(){
+  // 연장근무는 30분 단위(00, 30)만 사용
+  let opts = '';
+  for(let h=0; h<24; h++){
+    const hh = String(h).padStart(2,'0');
+    opts += `<option value="${hh}:00">${hh}:00</option>`;
+    opts += `<option value="${hh}:30">${hh}:30</option>`;
+  }
+  return opts;
+}
+function computeFamilyEndDate(startDateStr, requiredDays){
+  // 경조휴가: 토요일은 포함하고 일요일만 카운트에서 제외
+  let cur = parseDate(startDateStr);
+  let last = new Date(cur);
+  let count = 0;
+  while(count < requiredDays){
+    if(cur.getDay() !== 0){ count++; last = new Date(cur); }
+    if(count >= requiredDays) break;
+    cur.setDate(cur.getDate()+1);
+  }
+  return fmtDate(last);
+}
+function formatMinutes(mins){
+  const h = Math.floor(mins/60), m = mins%60;
+  if(h && m) return `${h}시간 ${m}분`;
+  if(h) return `${h}시간`;
+  return `${m}분`;
+}
+function trimNum(n){
+  const r = Math.round(n*100)/100;
+  return r.toString();
+}
+function daysToHours(days){ return trimNum(days*8); }
+function fmtDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function parseDate(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function isWeekend(d){ const day=d.getDay(); return day===0||day===6; }
+function isHoliday(dateStr){
+  return !!(state.data.holidays && state.data.holidays.some(h=>h.date===dateStr));
+}
+function countBusinessDays(startStr, endStr){
+  let start=parseDate(startStr), end=parseDate(endStr);
+  if(end<start) return 0;
+  let count=0; let cur=new Date(start);
+  while(cur<=end){ if(!isWeekend(cur) && !isHoliday(fmtDate(cur))) count++; cur.setDate(cur.getDate()+1); }
+  return count;
+}
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(window._toastTimer);
+  window._toastTimer=setTimeout(()=>t.classList.remove('show'), 2200);
+}
+function showLimitModal(msgHTML){
+  const old = document.getElementById('limit-modal');
+  if(old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'limit-modal';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-stamp">✕</div>
+      <div class="modal-title">신청할 수 없어요</div>
+      <div class="modal-msg">${msgHTML}</div>
+      <button class="btn btn-primary" id="limit-modal-close">확인</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = ()=> overlay.remove();
+  document.getElementById('limit-modal-close').onclick = close;
+  overlay.onclick = (e)=>{ if(e.target===overlay) close(); };
+}
+
+function buildSeedEmployees(){
+  return SEED_EMPLOYEES.map(s => ({
+    id: uid('emp'), empNo: s.empNo, password: DEFAULT_PASSWORD,
+    name: s.name, team: s.team, position: s.position,
+    isAdmin: !!s.isAdmin,
+    isApprover: LEADER_POSITIONS.includes(s.position),
+    isHrApprover: !!s.isHrApprover,
+    isFullViewer: !!s.isFullViewer,
+    annualTotal: s.annualTotal, baseUsed: 0,
+  }));
+}
+async function loadData(){
+  try{
+    const res = await window.storage.get(SHARED_KEY, true);
+    state.data = JSON.parse(res.value);
+    if(!state.data.employees || state.data.employees.length===0){
+      state.data.employees = buildSeedEmployees();
+      await saveData();
+    }
+    if(!state.data.holidays){
+      state.data.holidays = DEFAULT_HOLIDAYS_2026.slice();
+      await saveData();
+    }
+    if(state.data.orgVersion !== ORG_VERSION){
+      // 조직도가 통째로 교체됨: 기존 구성원/신청내역을 지우고 새 조직도로 재등록
+      state.data.employees = buildSeedEmployees();
+      state.data.requests = [];
+      state.data.orgVersion = ORG_VERSION;
+      await saveData();
+    }
+    if(!state.data.grantedNamHongFullView){
+      // 기존 데이터를 지우지 않고 김남홍에게 업무지원팀장(정나은)과 동일한 열람 권한만 부여
+      const nh = state.data.employees.find(e=>e.name==='김남홍');
+      if(nh){ nh.isFullViewer = true; }
+      state.data.grantedNamHongFullView = true;
+      await saveData();
+    }
+    if(!state.data.empNoPadded){
+      // 기존 데이터를 지우지 않고 사번을 두 자리(0 패딩) 형식으로 통일
+      state.data.employees.forEach(e=>{ e.empNo = String(e.empNo).padStart(2,'0'); });
+      state.data.empNoPadded = true;
+      await saveData();
+    }
+    if(!state.data.importedLeaveBatch2){
+      // 엑셀 데이터가 수정되어 재반영: 기존에 일괄 반영했던 기록은 지우고 최신 데이터로 다시 반영
+      state.data.requests = state.data.requests.filter(r=>!r.bulkImported);
+      IMPORTED_LEAVE_BATCH_1.forEach(rec=>{
+        const emp = state.data.employees.find(e=>String(e.empNo).padStart(2,'0')===rec.empNo);
+        if(!emp) return;
+        const newReq = {
+          id: uid('req'), employeeId: emp.id, type: rec.type,
+          startDate: rec.startDate, endDate: rec.endDate,
+          halfType: rec.halfType||null, splitStart: rec.splitStart!=null?rec.splitStart:null, splitEnd: rec.splitEnd!=null?rec.splitEnd:null,
+          otStart:null, otEnd:null, otMinutes:null, familySub:null,
+          days: rec.days, reason:'엑셀 일괄 반영', status:'approved', rejectReason:'',
+          createdAt: Date.parse(rec.startDate) || Date.now(),
+          isBackdated: false, bulkImported: true, approverId: null
+        };
+        state.data.requests.push(newReq);
+      });
+      state.data.importedLeaveBatch2 = true;
+      await saveData();
+    }
+    if(!state.data.defaultPasswordUpdatedV1){
+      // 아직 예전 초기 비밀번호(abinit!)를 그대로 쓰고 있는 계정만 새 기본 비밀번호로 갱신
+      // (이미 본인이 직접 비밀번호를 바꾼 계정은 건드리지 않음)
+      state.data.employees.forEach(e=>{
+        if(e.password === 'abinit!'){ e.password = DEFAULT_PASSWORD; }
+      });
+      state.data.defaultPasswordUpdatedV1 = true;
+      await saveData();
+    }
+    if(!state.data.addedLeeDongwonAdmin){
+      // 대표이사 이동원(사번 09) 추가: 기안/승인은 하지 않고 전체 열람과 관리자 권한만 부여
+      if(!state.data.employees.some(e=>String(e.empNo).padStart(2,'0')==='09')){
+        state.data.employees.push({
+          id: uid('emp'), empNo:'09', password: DEFAULT_PASSWORD,
+          name:'이동원', team:'본사', position:'대표이사',
+          isAdmin:true, isApprover:false, isHrApprover:false, isFullViewer:true,
+          annualTotal:0, baseUsed:0
+        });
+      }
+      state.data.addedLeeDongwonAdmin = true;
+      await saveData();
+    }
+    if(!state.data.fixedDec26YearV1){
+      // 정태건/양민우/김규동의 12/26 연차는 작년(전년도) 사용분이며, 올해 연차에서 차감되는 케이스라 날짜를 2025-12-26으로 보정
+      const targets = ['01','26','27'];
+      state.data.requests.forEach(r=>{
+        const emp = empById(r.employeeId);
+        if(!emp) return;
+        const empNoPadded = String(emp.empNo).padStart(2,'0');
+        if(r.bulkImported && r.type==='annual' && targets.includes(empNoPadded) && r.startDate==='2026-12-26'){
+          r.startDate = '2025-12-26';
+          r.endDate = '2025-12-26';
+        }
+      });
+      state.data.fixedDec26YearV1 = true;
+      await saveData();
+    }
+  }catch(e){
+    const freshEmployees = buildSeedEmployees();
+    const freshRequests = [];
+    IMPORTED_LEAVE_BATCH_1.forEach(rec=>{
+      const emp = freshEmployees.find(x=>String(x.empNo).padStart(2,'0')===rec.empNo);
+      if(!emp) return;
+      freshRequests.push({
+        id: uid('req'), employeeId: emp.id, type: rec.type,
+        startDate: rec.startDate, endDate: rec.endDate,
+        halfType: rec.halfType||null, splitStart: rec.splitStart!=null?rec.splitStart:null, splitEnd: rec.splitEnd!=null?rec.splitEnd:null,
+        otStart:null, otEnd:null, otMinutes:null, familySub:null,
+        days: rec.days, reason:'엑셀 일괄 반영', status:'approved', rejectReason:'',
+        createdAt: Date.parse(rec.startDate) || Date.now(),
+        isBackdated: false, bulkImported: true, approverId: null
+      });
+    });
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch2: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true };
+    await saveData();
+  }
+}
+async function saveData(){
+  try{
+    await window.storage.set(SHARED_KEY, JSON.stringify(state.data), true);
+  }catch(e){ console.error('save failed', e); showToast('저장에 실패했어요. 다시 시도해주세요.'); }
+}
+async function loadIdentity(){
+  try{
+    const res = await window.storage.get(PERSONAL_KEY, false);
+    const parsed = JSON.parse(res.value);
+    return parsed.employeeId;
+  }catch(e){ return null; }
+}
+async function saveIdentity(employeeId){
+  try{ await window.storage.set(PERSONAL_KEY, JSON.stringify({employeeId}), false); }
+  catch(e){ console.error(e); }
+}
+
+function isFinalOvertimeApprover(emp){
+  return !!emp && !!emp.isHrApprover;
+}
+function finalApproverName(){
+  const e = state.data.employees.find(x=>x.isHrApprover);
+  return e ? e.name : '미지정';
+}
+function isLeaderPosition(emp){
+  return !!emp && LEADER_POSITIONS.includes(emp.position);
+}
+function findTeamLeader(team){
+  return state.data.employees.find(e=>e.team===team && LEADER_POSITIONS.includes(e.position));
+}
+function canApprove(r){
+  if(!state.me || !state.me.isApprover) return false;
+  const owner = empById(r.employeeId);
+  if(!owner) return false;
+  if(r.type==='overtime'){
+    if(r.status==='pending'){
+      // 1차: 본인이 속한 팀장/지점장 (본인이 리더면 자동승인되어 이 상태에 머물지 않음)
+      const leader = findTeamLeader(owner.team);
+      if(!leader) return isFinalOvertimeApprover(state.me); // 팀장이 없으면 최종승인자가 대신 처리
+      return state.me.id === leader.id;
+    }
+    if(r.status==='pending_hr'){
+      // 2차(최종): 지정된 연장근무 최종 승인자
+      return isFinalOvertimeApprover(state.me);
+    }
+    return false;
+  }
+  // 일반 유형: 본인이 속한 팀의 팀장/지점장만 승인 가능 (본인이 리더면 이미 자동승인되어 대기 상태가 아님)
+  const leader = findTeamLeader(owner.team);
+  if(leader) return state.me.id === leader.id;
+  return isFinalOvertimeApprover(state.me); // 팀장이 없는 경우의 안전장치
+}
+function myPendingCount(){
+  if(!state.me || !state.me.isApprover) return 0;
+  return state.data.requests.filter(r=>(r.status==='pending'||r.status==='pending_hr') && canApprove(r)).length;
+}
+function visibleEmployeesForStatus(viewer){
+  // 본인, 본인이 속한 팀의 팀장/지점장, 연장근무 최종승인자, 시스템 관리자, 전체열람 권한자만 조회 가능
+  if(viewer.isAdmin || isFinalOvertimeApprover(viewer) || viewer.isFullViewer) return state.data.employees;
+  if(isLeaderPosition(viewer)) return state.data.employees.filter(e=>e.team===viewer.team);
+  return state.data.employees.filter(e=>e.id===viewer.id);
+}
+function annualUsed(empId){
+  const emp = empById(empId);
+  const base = emp && emp.baseUsed ? emp.baseUsed : 0;
+  const fromApp = state.data.requests
+    .filter(r=>r.employeeId===empId && r.status==='approved' && LEAVE_TYPES[r.type].deduct)
+    .reduce((sum,r)=> sum + r.days, 0);
+  return base + fromApp;
+}
+function empName(id){ const e=state.data.employees.find(x=>x.id===id); return e? e.name : '알 수 없음'; }
+function empById(id){ return state.data.employees.find(x=>x.id===id); }
+
+/* ---------------- RENDER: LOGIN ---------------- */
+function renderLogin(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-eyebrow">Team Attendance</div>
+      <h1 class="login-title">HR Portal</h1>
+      <p class="login-sub">연차 · 반차 · 예비군훈련 등 팀 근태를 한곳에서 신청하고 결재하세요.</p>
+
+      <div class="field">
+        <label>사번</label>
+        <input type="text" id="login-empno" placeholder="예: 05" inputmode="numeric" maxlength="2">
+      </div>
+      <div class="field">
+        <label>비밀번호</label>
+        <input type="password" id="login-password" placeholder="비밀번호를 입력하세요">
+      </div>
+      <button class="btn btn-primary" id="btn-login">로그인</button>
+      <div class="hint" id="login-error" style="margin-top:10px; text-align:center; color:var(--stamp-red);"></div>
+      <div class="hint" style="margin-top:14px; text-align:center;">계정이 없거나 사번을 모르시나요? 관리자에게 문의해주세요.</div>
+    </div>
+  </div>`;
+
+  const doLogin = async ()=>{
+    const empNoRaw = document.getElementById('login-empno').value.trim();
+    const empNo = empNoRaw.padStart(2, '0');
+    const password = document.getElementById('login-password').value;
+    const errBox = document.getElementById('login-error');
+    if(!empNoRaw || !password){ errBox.textContent = '사번과 비밀번호를 모두 입력해주세요.'; return; }
+    const match = state.data.employees.find(e=> String(e.empNo).padStart(2,'0')===empNo && e.password===password);
+    if(!match){ errBox.textContent = '사번 또는 비밀번호가 올바르지 않아요.'; return; }
+    await saveIdentity(match.id);
+    state.me = match;
+    state.view='dashboard';
+    renderApp();
+  };
+  document.getElementById('btn-login').onclick = doLogin;
+  document.getElementById('login-password').addEventListener('keydown', (e)=>{ if(e.key==='Enter') doLogin(); });
+}
+
+/* ---------------- RENDER: APP SHELL ---------------- */
+function navItems(){
+  const items = [
+    {id:'dashboard', icon:'◆', label:'대시보드'},
+    {id:'request', icon:'✎', label:'신청하기'},
+    {id:'my-requests', icon:'☰', label:'내 신청내역'},
+    {id:'leave-status', icon:'📊', label:'연차현황'},
+    {id:'overtime-status', icon:'🕐', label:'연장근무 현황'},
+  ];
+  if(state.me.isApprover) items.push({id:'approvals', icon:'✓', label:'승인함', badge: myPendingCount()});
+  items.push({id:'calendar', icon:'▦', label:'회사 캘린더'});
+  items.push({id:'account', icon:'🔑', label:'계정설정'});
+  if(state.me.isAdmin) items.push({id:'members', icon:'☺', label:'구성원 관리'});
+  return items;
+}
+
+function renderApp(){
+  const app = document.getElementById('app');
+  const items = navItems();
+  app.innerHTML = `
+    <div class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div>
+          <div class="brand-name">HR Portal</div>
+          <div class="brand-sub">ATTENDANCE OS</div>
+        </div>
+      </div>
+      <nav class="navlist">
+        ${items.map(it=>`
+          <div class="nav-item ${state.view===it.id?'active':''}" data-nav="${it.id}">
+            <span class="nav-icon">${it.icon}</span>${it.label}
+            ${it.badge? `<span class="nav-badge">${it.badge}</span>`:''}
+          </div>`).join('')}
+      </nav>
+      <div class="side-user">
+        <div class="side-user-name">${state.me.name}</div>
+        <div class="side-user-role">${state.me.team||''} ${state.me.position||''} ${state.me.isApprover?'· 승인자':''}</div>
+        <span class="switch-link" id="switch-user">다른 계정으로 전환</span>
+      </div>
+    </div>
+    <div class="mobile-topbar">
+      <div class="mt-brand"><span class="brand-mark" style="width:22px;height:22px;"></span>HR Portal</div>
+      <div class="mt-user">
+        <strong>${state.me.name}</strong>
+        <span class="switch-link" id="switch-user-mobile">전환</span>
+      </div>
+    </div>
+    <div class="main" id="main"></div>
+  `;
+  items.forEach(it=>{
+    document.querySelector(`[data-nav="${it.id}"]`).onclick = ()=>{ state.view=it.id; renderApp(); };
+  });
+  document.getElementById('switch-user').onclick = async ()=>{
+    await saveIdentity('');
+    state.me=null; state.view='dashboard'; renderLogin();
+  };
+  document.getElementById('switch-user-mobile').onclick = async ()=>{
+    await saveIdentity('');
+    state.me=null; state.view='dashboard'; renderLogin();
+  };
+  renderMain();
+}
+
+function renderMain(){
+  const main = document.getElementById('main');
+  if(state.view==='dashboard') return renderDashboard(main);
+  if(state.view==='request') return renderRequestForm(main);
+  if(state.view==='my-requests') return renderMyRequests(main);
+  if(state.view==='leave-status') return renderLeaveStatus(main);
+  if(state.view==='overtime-status') return renderOvertimeStatus(main);
+  if(state.view==='approvals') return renderApprovals(main);
+  if(state.view==='calendar') return renderCalendar(main);
+  if(state.view==='account') return renderAccountSettings(main);
+  if(state.view==='members') return renderMembers(main);
+}
+
+/* ---------------- DASHBOARD ---------------- */
+function renderDashboard(main){
+  const used = annualUsed(state.me.id);
+  const remain = (state.me.annualTotal - used).toFixed(1).replace(/\.0$/,'');
+  const remainHours = daysToHours(state.me.annualTotal - used);
+  const usedHours = daysToHours(used);
+  const myReqs = state.data.requests.filter(r=>r.employeeId===state.me.id).sort((a,b)=>b.createdAt-a.createdAt).slice(0,3);
+  const pendingAll = state.data.requests.filter(r=>r.status==='pending'||r.status==='pending_hr');
+
+  main.innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Dashboard</div>
+      <h1 class="page-title">안녕하세요, ${state.me.name}님</h1>
+      <p class="page-desc">오늘 ${todayStr()} 기준 팀 근태 현황이에요.</p>
+    </div>
+    <div class="grid grid-3" style="margin-bottom:22px;">
+      <div class="card stat-card">
+        <div class="stat-label">잔여 연차</div>
+        <div class="stat-value">${remain}<span style="font-size:16px;color:var(--muted);"> / ${state.me.annualTotal}일</span></div>
+        <div class="stat-sub">${remainHours}시간 남음 · 사용 ${used}일(${usedHours}시간) · 1일=8시간, 반차=4시간 기준</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">내 신청 건수</div>
+        <div class="stat-value">${myReqs.length? state.data.requests.filter(r=>r.employeeId===state.me.id).length : 0}</div>
+        <div class="stat-sub">누적 신청 건</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-label">${state.me.isApprover? '결재 대기' : '전체 구성원'}</div>
+        <div class="stat-value">${state.me.isApprover? pendingAll.length : state.data.employees.length}</div>
+        <div class="stat-sub">${state.me.isApprover? '승인 대기 중인 요청':'등록된 구성원 수'}</div>
+      </div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="section-title">최근 내 신청 <span class="switch-link" data-nav2="my-requests" style="font-size:12px;">전체 보기 →</span></div>
+        <div class="req-list" id="recent-list"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">이번 달 팀 현황</div>
+        <div id="mini-cal"></div>
+      </div>
+    </div>
+  `;
+  document.querySelector('[data-nav2="my-requests"]').onclick=()=>{ state.view='my-requests'; renderApp(); };
+  const list = document.getElementById('recent-list');
+  if(myReqs.length===0){
+    list.innerHTML = `<div class="empty"><div class="empty-icon">🗂️</div>아직 신청 내역이 없어요.</div>`;
+  }else{
+    list.innerHTML = myReqs.map(r=>reqCardHTML(r,false)).join('');
+  }
+  renderMiniCalendar(document.getElementById('mini-cal'));
+}
+
+function renderMiniCalendar(container){
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth();
+  const first = new Date(year, month, 1);
+  const startOffset = first.getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  let html = `<div style="font-family:var(--mono); font-weight:700; font-size:13px; margin-bottom:10px;">${year}.${String(month+1).padStart(2,'0')}</div>`;
+  html += `<div class="cal-grid" style="gap:4px;">`;
+  ['일','월','화','수','목','금','토'].forEach(d=> html += `<div class="cal-dow" style="font-size:10px;">${d}</div>`);
+  for(let i=0;i<startOffset;i++) html += `<div></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const dateStr = fmtDate(new Date(year,month,d));
+    const dayReqs = state.data.requests.filter(r=> r.status!=='rejected' && r.status!=='cancelled' && r.type!=='overtime' && dateStr>=r.startDate && dateStr<=r.endDate);
+    const isToday = d===now.getDate();
+    html += `<div style="aspect-ratio:1; border-radius:6px; display:flex; align-items:center; justify-content:center;
+      font-family:var(--mono); font-size:10.5px; position:relative;
+      background:${dayReqs.length? 'var(--brand)':'transparent'}; color:${dayReqs.length?'#fff':'var(--ink-soft)'};
+      ${isToday? 'box-shadow:inset 0 0 0 1.5px var(--stamp-red);':''}">
+      ${d}
+      ${dayReqs.length? `<span style="position:absolute; bottom:-1px; right:-1px; background:var(--stamp-red); color:#fff; border-radius:50%; width:13px; height:13px; font-size:8px; display:flex; align-items:center; justify-content:center;">${dayReqs.length}</span>`:''}
+    </div>`;
+  }
+  html += `</div><div class="hint">숫자는 해당 날짜에 휴가/훈련 중인 인원 수예요.</div>`;
+  container.innerHTML = html;
+}
+
+/* ---------------- REQUEST CARD ---------------- */
+function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel){
+  const t = LEAVE_TYPES[r.type];
+  const dateLabel = r.type==='half'
+    ? (r.halfType==='split'
+        ? `${r.startDate} · ${String(r.splitStart).padStart(2,'0')}:00~${String(r.splitEnd).padStart(2,'0')}:00 분할반차 (${r.splitEnd-r.splitStart}시간)`
+        : `${r.startDate} · ${r.halfType==='am'?'오전':'오후'} 반차`)
+    : r.type==='overtime'
+    ? `${r.startDate} · ${r.otStart}~${r.otEnd} (${formatMinutes(r.otMinutes)})`
+    : r.type==='family'
+    ? `${r.startDate} ~ ${r.endDate} · ${FAMILY_SUBTYPES[r.familySub]? FAMILY_SUBTYPES[r.familySub].label : ''} (${r.days}일, 일요일 제외)`
+    : (r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`);
+  const stampClass = r.noApprovalNeeded? 'info' : (r.status==='approved'?'':((r.status==='rejected'||r.status==='cancelled')?'rejected':'pending'));
+  const stampLabel = r.noApprovalNeeded? '등록완료' : (r.status==='approved'?'승인':(r.status==='rejected'?'반려':(r.status==='cancelled'?'취소됨':(r.status==='pending_hr'?'1차승인':'대기중'))));
+  return `
+  <div class="req-card">
+    <div class="req-type-chip" style="background:${t.soft}; color:${t.color};">${t.icon} ${t.label}</div>
+    ${r.isBackdated? `<div class="req-type-chip" style="background:var(--stamp-red-soft); color:var(--stamp-red);">🕘 사후신청</div>`:''}
+    <div class="req-main">
+      <div class="req-title-row">
+        <span class="req-name">${empName(r.employeeId)}</span>
+        <span class="req-dates" style="color:var(--muted);">${(empById(r.employeeId)||{}).team||''}</span>
+        <span class="req-dates">${dateLabel}${t.deduct? ` · ${trimNum(r.days)}일(${daysToHours(r.days)}시간) 차감`:''}</span>
+      </div>
+      ${r.reason? `<div class="req-reason">사유: ${escapeHTML(r.reason)}</div>`:''}
+      ${r.status==='rejected' && r.rejectReason? `<div class="req-reason" style="color:var(--stamp-red);">반려 사유: ${escapeHTML(r.rejectReason)}</div>`:''}
+      ${r.status==='cancelled'? `<div class="req-reason" style="color:var(--stamp-red);">승인 후 취소됨 (처리: ${empName(r.cancelledBy)})</div>`:''}
+      ${r.type==='overtime' && r.status==='approved' ? `<div class="req-reason">1차 승인: ${empName(r.teamApproverId)} · 최종 승인: ${empName(r.hrApproverId)}</div>`:''}
+      ${r.type==='overtime' && r.status==='pending_hr' && r.teamApproverId ? `<div class="req-reason">1차 승인: ${empName(r.teamApproverId)}</div>`:''}
+      ${r.autoApproved? `<div class="req-reason" style="color:var(--green);">⚡ 자동승인 — 기안자가 팀장/지점장/부사장이라 별도 결재 없이 처리됨</div>`:''}
+      ${r.noApprovalNeeded? `<div class="req-reason" style="color:#3B7B7B;">🧳 출장은 결재 없이 신청 즉시 등록돼요 — 동료들이 행방을 알 수 있도록 캘린더에 표시돼요</div>`:''}
+      ${r.bulkImported? `<div class="req-reason" style="color:var(--muted);">📥 엑셀로 일괄 반영된 기록이에요 (사후신청 아님)</div>`:''}
+      ${note? `<div class="req-reason" style="color:var(--amber);">${note}</div>`:''}
+    </div>
+    ${showApproverActions && (r.status==='pending'||r.status==='pending_hr') ? `
+      <div class="req-actions">
+        <button class="btn btn-sm btn-approve" data-approve="${r.id}">승인</button>
+        <button class="btn btn-sm btn-reject" data-reject="${r.id}">반려</button>
+      </div>
+    ` : `<div class="stamp ${stampClass}">${stampLabel}</div>`}
+    ${showActions && (r.status==='pending'||r.status==='pending_hr') ? `
+      <button class="btn btn-sm btn-danger" data-cancel="${r.id}" style="margin-left:8px;">신청 취소</button>
+    `:''}
+    ${showAdminCancel && r.status==='approved' ? `
+      <button class="btn btn-sm btn-danger" data-admin-cancel="${r.id}" style="margin-left:8px;">승인 취소(철회)</button>
+    `:''}
+  </div>`;
+}
+function escapeHTML(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+/* ---------------- REQUEST FORM ---------------- */
+function renderRequestForm(main){
+  main.innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">New Request</div>
+      <h1 class="page-title">근태 신청</h1>
+      <p class="page-desc">유형을 선택하고 필요한 정보를 입력한 뒤 제출하세요. 제출 즉시 승인자에게 전달돼요.</p>
+    </div>
+    <div class="card form-card">
+      <div class="type-grid" id="type-grid">
+        ${Object.entries(LEAVE_TYPES).map(([key,t])=>`
+          <div class="type-opt ${state.formType===key?'selected':''}" data-type="${key}">${t.icon}<br>${t.label}</div>
+        `).join('')}
+      </div>
+      <div id="date-fields"></div>
+      <div class="field">
+        <label>사유 (선택)</label>
+        <textarea id="reason-input" rows="2" placeholder="간단한 사유를 남겨주세요"></textarea>
+      </div>
+      <button class="btn btn-primary" id="submit-req">신청 제출</button>
+    </div>
+  `;
+  document.querySelectorAll('[data-type]').forEach(el=>{
+    el.onclick = ()=>{ state.formType = el.dataset.type; renderRequestForm(main); };
+  });
+  renderDateFields();
+
+  document.getElementById('submit-req').onclick = async ()=>{
+    const type = state.formType;
+    const t = LEAVE_TYPES[type];
+    let startDate, endDate, halfType=null, splitStart=null, splitEnd=null, otStart=null, otEnd=null, otMinutes=null, familySub=null, days=0;
+    if(type==='half'){
+      startDate = endDate = document.getElementById('single-date').value;
+      halfType = state.formHalf;
+      if(halfType==='split'){
+        splitStart = parseInt(document.getElementById('split-start').value, 10);
+        splitEnd = parseInt(document.getElementById('split-end').value, 10);
+        if(splitEnd <= splitStart){ showToast('종료 시간은 시작 시간보다 늦어야 해요.'); return; }
+        const hours = splitEnd - splitStart;
+        days = Math.round((hours/8)*1000)/1000;
+      }else{
+        days = 0.5;
+      }
+    }else if(type==='overtime'){
+      startDate = endDate = document.getElementById('ot-date').value;
+      otStart = document.getElementById('ot-start').value;
+      otEnd = document.getElementById('ot-end').value;
+      if(!otStart || !otEnd){ showToast('시작/종료 시간을 입력해주세요.'); return; }
+      const [sh,sm] = otStart.split(':').map(Number);
+      const [eh,em] = otEnd.split(':').map(Number);
+      otMinutes = (eh*60+em) - (sh*60+sm);
+      if(otMinutes <= 0){ showToast('종료 시간은 시작 시간보다 늦어야 해요.'); return; }
+      days = 0;
+    }else if(type==='family'){
+      familySub = state.formFamilySub;
+      startDate = document.getElementById('family-start').value;
+      const requiredDays = FAMILY_SUBTYPES[familySub].days;
+      endDate = computeFamilyEndDate(startDate, requiredDays);
+      days = requiredDays;
+    }else{
+      startDate = document.getElementById('start-date').value;
+      endDate = document.getElementById('end-date').value || startDate;
+      days = countBusinessDays(startDate, endDate);
+    }
+    if(!startDate){ showToast('날짜를 선택해주세요.'); return; }
+    if(parseDate(endDate) < parseDate(startDate)){ showToast('종료일이 시작일보다 빠를 수 없어요.'); return; }
+    if(parseDate(startDate) < parseDate(minAllowedDateStr())){
+      showLimitModal(`오늘 기준 <strong>최대 10일 전</strong>까지만 사후 신청할 수 있어요.`);
+      return;
+    }
+
+    if(t.deduct){
+      const remain = state.me.annualTotal - annualUsed(state.me.id);
+      if(days > remain){
+        showLimitModal(`잔여 연차는 <strong>${trimNum(remain)}일 (${daysToHours(remain)}시간)</strong>이에요.<br>${trimNum(days)}일(${daysToHours(days)}시간)은 신청할 수 없어요.`);
+        return;
+      }
+    }
+
+    if(BLOCKING_TYPES.includes(type)){
+      const conflict = findDateConflict(state.me.id, startDate, endDate);
+      if(conflict){
+        const ct = LEAVE_TYPES[conflict.type];
+        const conflictDateLabel = conflict.startDate===conflict.endDate ? conflict.startDate : `${conflict.startDate} ~ ${conflict.endDate}`;
+        showLimitModal(`이미 <strong>${conflictDateLabel}</strong>에<br><strong>${ct.icon} ${ct.label}</strong> 신청이 있어요.<br>날짜가 겹치는 신청은 등록할 수 없어요.`);
+        return;
+      }
+    }
+    const reason = document.getElementById('reason-input').value.trim();
+
+    const newReq = {
+      id: uid('req'), employeeId: state.me.id, type, startDate, endDate,
+      halfType, splitStart, splitEnd, otStart, otEnd, otMinutes, familySub,
+      days, reason, status:'pending', rejectReason:'', createdAt: Date.now(),
+      isBackdated: parseDate(startDate) < parseDate(todayStr())
+    };
+
+    // 출장은 결재가 필요 없는 유형: 누구든 신청 즉시 등록(승인) 처리
+    if(LEAVE_TYPES[type].noApproval){
+      newReq.status = 'approved';
+      newReq.approverId = null;
+      newReq.noApprovalNeeded = true;
+    }
+    // 팀장/지점장/부사장 본인 기안 건은 결재 없이 자동승인 (로그로 남김)
+    else if(isLeaderPosition(state.me)){
+      if(type==='overtime'){
+        newReq.teamApproverId = state.me.id;
+        newReq.teamApprovedAt = Date.now();
+        newReq.autoApproved = true;
+        if(isFinalOvertimeApprover(state.me)){
+          newReq.status = 'approved';
+          newReq.hrApproverId = state.me.id;
+          newReq.hrApprovedAt = Date.now();
+          newReq.approverId = state.me.id;
+        }else{
+          newReq.status = 'pending_hr';
+        }
+      }else{
+        newReq.status = 'approved';
+        newReq.approverId = state.me.id;
+        newReq.autoApproved = true;
+      }
+    }
+
+    let showToastMsg = '신청이 제출되었어요. 승인을 기다려주세요.';
+    if(newReq.noApprovalNeeded) showToastMsg = '출장이 등록됐어요. 별도 결재 없이 바로 반영돼요.';
+    else if(newReq.status==='approved') showToastMsg = '신청이 제출과 동시에 자동 승인됐어요.';
+    else if(newReq.status==='pending_hr') showToastMsg = `1차(본인) 승인이 자동 처리됐어요. ${finalApproverName()}님의 최종 승인만 남았어요.`;
+
+    state.data.requests.push(newReq);
+    await saveData();
+    showToast(showToastMsg);
+    state.view='my-requests';
+    renderApp();
+  };
+}
+function renderDateFields(){
+  const box = document.getElementById('date-fields');
+  const type = state.formType;
+  const remain = state.me.annualTotal - annualUsed(state.me.id);
+  const remainHours = daysToHours(remain);
+  if(type==='half'){
+    box.innerHTML = `
+      <div class="field">
+        <label>날짜</label>
+        <input type="date" id="single-date" min="${minAllowedDateStr()}" value="${todayStr()}">
+        <div class="half-toggle">
+          <div class="half-opt ${state.formHalf==='am'?'selected':''}" data-half="am">오전 반차</div>
+          <div class="half-opt ${state.formHalf==='pm'?'selected':''}" data-half="pm">오후 반차</div>
+          <div class="half-opt ${state.formHalf==='split'?'selected':''}" data-half="split">분할반차</div>
+        </div>
+        ${state.formHalf==='split' ? `
+          <div class="row-2" style="margin-top:12px;">
+            <div>
+              <label>시작 시간</label>
+              <select id="split-start">${hourOptions()}</select>
+            </div>
+            <div>
+              <label>종료 시간</label>
+              <select id="split-end">${hourOptions()}</select>
+            </div>
+          </div>
+          <div class="hint" id="split-hours-hint"></div>
+        ` : `
+          <div class="hint">현재 잔여 연차 <strong>${remain}일 (${remainHours}시간)</strong> · 반차는 4시간(0.5일) 차감돼요. 오늘 기준 최대 10일 전까지 사후 신청 가능해요.</div>
+        `}
+      </div>`;
+    document.querySelectorAll('[data-half]').forEach(el=>{
+      el.onclick = ()=>{ state.formHalf = el.dataset.half; renderDateFields(); };
+    });
+    if(state.formHalf==='split'){
+      const startSel = document.getElementById('split-start');
+      const endSel = document.getElementById('split-end');
+      startSel.value = state.splitStart;
+      endSel.value = state.splitEnd;
+      const updateHint = ()=>{
+        state.splitStart = parseInt(startSel.value,10);
+        state.splitEnd = parseInt(endSel.value,10);
+        const hint = document.getElementById('split-hours-hint');
+        const hours = state.splitEnd - state.splitStart;
+        if(hours <= 0){
+          hint.innerHTML = `<span style="color:var(--stamp-red);">종료 시간은 시작 시간보다 늦어야 해요.</span>`;
+        }else{
+          const dayVal = Math.round((hours/8)*1000)/1000;
+          hint.innerHTML = `총 <strong>${hours}시간</strong> (연차 ${dayVal}일 차감 · 1일=8시간 기준) · 정시 단위로만 입력돼요. 현재 잔여 연차 <strong>${remain}일 (${remainHours}시간)</strong>`;
+        }
+      };
+      startSel.onchange = updateHint;
+      endSel.onchange = updateHint;
+      updateHint();
+    }
+  }else if(type==='overtime'){
+    box.innerHTML = `
+      <div class="field">
+        <label>근무 날짜 (주말 포함 가능)</label>
+        <input type="date" id="ot-date" min="${minAllowedDateStr()}" value="${todayStr()}">
+      </div>
+      <div class="field row-2">
+        <div>
+          <label>시작 시간</label>
+          <select id="ot-start">${halfHourOptions()}</select>
+        </div>
+        <div>
+          <label>종료 시간</label>
+          <select id="ot-end">${halfHourOptions()}</select>
+        </div>
+      </div>
+      <div class="hint" id="ot-hours-hint"></div>
+      <div class="hint">30분 단위로만 선택돼요 · 이 유형은 연차에서 차감되지 않고, <strong>${finalApproverName()}</strong>님(연장근무 최종승인자)이 승인해요.</div>
+    `;
+    const startInp = document.getElementById('ot-start');
+    const endInp = document.getElementById('ot-end');
+    startInp.value = state.otStart;
+    endInp.value = state.otEnd;
+    const updateOtHint = ()=>{
+      state.otStart = startInp.value;
+      state.otEnd = endInp.value;
+      const hint = document.getElementById('ot-hours-hint');
+      const [sh,sm] = (state.otStart||'0:0').split(':').map(Number);
+      const [eh,em] = (state.otEnd||'0:0').split(':').map(Number);
+      const mins = (eh*60+em) - (sh*60+sm);
+      if(!state.otStart || !state.otEnd || mins <= 0){
+        hint.innerHTML = `<span style="color:var(--stamp-red);">종료 시간은 시작 시간보다 늦어야 해요.</span>`;
+      }else{
+        hint.innerHTML = `총 근무시간 <strong>${formatMinutes(mins)}</strong>`;
+      }
+    };
+    startInp.onchange = updateOtHint;
+    endInp.onchange = updateOtHint;
+    updateOtHint();
+  }else if(type==='family'){
+    box.innerHTML = `
+      <div class="field">
+        <label>경조 사유</label>
+        <div class="type-grid" style="grid-template-columns:repeat(2,1fr);" id="family-sub-grid">
+          ${Object.entries(FAMILY_SUBTYPES).map(([key,f])=>`
+            <div class="type-opt ${state.formFamilySub===key?'selected':''}" data-familysub="${key}">${f.label}<br><span style="font-weight:400; font-size:11px;">${f.days}일</span></div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="field">
+        <label>경조사 발생일 (예: 결혼식 당일, 상을 당한 날)</label>
+        <input type="date" id="family-start" min="${minAllowedDateStr()}" value="${todayStr()}">
+      </div>
+      <div class="hint" id="family-end-hint"></div>
+      <div class="hint">경조휴가는 <strong>발생 당일부터</strong> 계산돼요. 토요일도 일수에 포함되고, <strong>일요일만 계산에서 제외</strong>돼요. 연차에서 차감되지 않아요.</div>
+    `;
+    document.querySelectorAll('[data-familysub]').forEach(el=>{
+      el.onclick = ()=>{ state.formFamilySub = el.dataset.familysub; renderDateFields(); };
+    });
+    const familyStartInp = document.getElementById('family-start');
+    const updateFamilyHint = ()=>{
+      const requiredDays = FAMILY_SUBTYPES[state.formFamilySub].days;
+      const endDate = computeFamilyEndDate(familyStartInp.value, requiredDays);
+      document.getElementById('family-end-hint').innerHTML =
+        `자동 계산된 종료일: <strong>${endDate}</strong> (총 ${requiredDays}일, 일요일 제외)`;
+    };
+    familyStartInp.onchange = updateFamilyHint;
+    updateFamilyHint();
+  }else{
+    box.innerHTML = `
+      <div class="field row-2">
+        <div>
+          <label>시작일</label>
+          <input type="date" id="start-date" min="${minAllowedDateStr()}" value="${todayStr()}">
+        </div>
+        <div>
+          <label>종료일</label>
+          <input type="date" id="end-date" min="${minAllowedDateStr()}" value="${todayStr()}">
+        </div>
+      </div>
+      <div class="hint">${LEAVE_TYPES[type].deduct? `현재 잔여 연차 <strong>${remain}일 (${remainHours}시간)</strong> · 주말·공휴일을 제외한 영업일 기준으로 차감돼요 (1일=8시간).` : (LEAVE_TYPES[type].noApproval? '출장은 연차 차감도 없고, 결재 없이 신청 즉시 바로 등록돼요.' : '이 유형은 연차에서 차감되지 않아요.')} 오늘 기준 최대 10일 전까지 사후 신청 가능해요.</div>`;
+  }
+}
+
+/* ---------------- MY REQUESTS ---------------- */
+function renderMyRequests(main){
+  const mine = state.data.requests.filter(r=>r.employeeId===state.me.id).sort((a,b)=>b.createdAt-a.createdAt);
+  main.innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">My Requests</div>
+      <h1 class="page-title">내 신청내역</h1>
+      <p class="page-desc">총 ${mine.length}건의 신청 기록이 있어요.</p>
+    </div>
+    <div class="card"><div class="req-list" id="mine-list"></div></div>
+  `;
+  const list = document.getElementById('mine-list');
+  list.innerHTML = mine.length? mine.map(r=>reqCardHTML(r,true,false)).join('') : `<div class="empty"><div class="empty-icon">🗂️</div>아직 신청 내역이 없어요.</div>`;
+  document.querySelectorAll('[data-cancel]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.dataset.cancel;
+      state.data.requests = state.data.requests.filter(r=>r.id!==id);
+      await saveData();
+      showToast('신청을 취소했어요.');
+      renderMyRequests(main);
+    };
+  });
+}
+
+/* ---------------- LEAVE STATUS ---------------- */
+function renderLeaveStatus(main){
+  const visible = visibleEmployeesForStatus(state.me).slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  const visibleIds = new Set(visible.map(e=>e.id));
+  const approvedReqs = state.data.requests
+    .filter(r=> r.status==='approved' && r.type!=='overtime' && visibleIds.has(r.employeeId))
+    .sort((a,b)=>b.createdAt-a.createdAt);
+
+  main.innerHTML = `
+    <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <div>
+        <div class="page-eyebrow">Leave Status</div>
+        <h1 class="page-title">연차현황</h1>
+        <p class="page-desc">본인, 본인이 속한 팀의 팀장/지점장, 연장근무 최종승인자, 시스템 관리자, 전체열람 권한자만 조회할 수 있어요. (연차 · 반차 · 분할반차 사용/잔여 현황)</p>
+      </div>
+      ${visible.length>1 ? `<button class="btn btn-ghost btn-sm" id="export-leave-excel" style="width:auto; white-space:nowrap;">⬇ 엑셀 다운로드</button>`:''}
+    </div>
+    <div class="card" style="margin-bottom:20px;">
+      <table class="members">
+        <thead><tr><th>사번</th><th>이름</th><th>팀</th><th>직급</th><th>총연차</th><th>사용</th><th>잔여</th></tr></thead>
+        <tbody>
+          ${visible.map(e=>{
+            const used = annualUsed(e.id);
+            const remain = trimNum(e.annualTotal - used);
+            return `
+            <tr>
+              <td style="font-family:var(--mono); color:var(--muted);">${e.empNo||''}</td>
+              <td><strong>${e.name}</strong>${e.id===state.me.id?' <span style="color:var(--muted); font-size:11px;">(나)</span>':''}</td>
+              <td>${e.team||''}</td>
+              <td>${e.position||''}</td>
+              <td style="font-family:var(--mono);">${e.annualTotal}일 (${daysToHours(e.annualTotal)}시간)</td>
+              <td style="font-family:var(--mono);">${trimNum(used)}일 (${daysToHours(used)}시간)</td>
+              <td style="font-family:var(--mono); color:var(--brand);">${remain}일 (${daysToHours(e.annualTotal-used)}시간)</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${state.me.isAdmin ? `
+    <div class="card">
+      <div class="section-title">승인된 신청 관리 <span style="font-size:11.5px; color:var(--muted); font-weight:600;">시스템 관리자만 보여요 · 사유가 생겨 취소하면 연차가 다시 잔여로 돌아가요</span></div>
+      <div class="req-list">
+        ${approvedReqs.length? approvedReqs.map(r=>reqCardHTML(r,false,false,null,true)).join('') : `<div class="empty">승인된 신청이 없어요.</div>`}
+      </div>
+    </div>
+    `:''}
+  `;
+  if(state.me.isAdmin){
+    document.querySelectorAll('[data-admin-cancel]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const r = state.data.requests.find(x=>x.id===btn.dataset.adminCancel);
+        if(!confirm(`${empName(r.employeeId)}님의 승인된 신청을 취소할까요? 연차가 다시 잔여로 돌아가요.`)) return;
+        r.status = 'cancelled';
+        r.cancelledBy = state.me.id;
+        r.cancelledAt = Date.now();
+        await saveData();
+        showToast('승인을 취소했어요.');
+        renderLeaveStatus(main);
+      };
+    });
+  }
+  const exportBtn = document.getElementById('export-leave-excel');
+  if(exportBtn){
+    exportBtn.onclick = ()=>{
+      if(typeof XLSX==='undefined'){ showToast('엑셀 라이브러리를 불러오지 못했어요. 인터넷 연결이 필요해요.'); return; }
+      const rows = visible.map(e=>{
+        const used = annualUsed(e.id);
+        return {
+          '사번': e.empNo||'',
+          '이름': e.name,
+          '팀': e.team||'',
+          '직급': e.position||'',
+          '총연차(일)': e.annualTotal,
+          '총연차(시간)': Number(daysToHours(e.annualTotal)),
+          '사용(일)': Number(trimNum(used)),
+          '사용(시간)': Number(daysToHours(used)),
+          '잔여(일)': Number(trimNum(e.annualTotal-used)),
+          '잔여(시간)': Number(daysToHours(e.annualTotal-used)),
+        };
+      });
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '연차현황');
+      XLSX.writeFile(wb, `연차현황_${todayStr()}.xlsx`);
+    };
+  }
+}
+
+/* ---------------- OVERTIME STATUS ---------------- */
+function renderOvertimeStatus(main){
+  const visible = visibleEmployeesForStatus(state.me);
+  const visibleIds = new Set(visible.map(e=>e.id));
+  const otReqs = state.data.requests
+    .filter(r=>r.type==='overtime' && visibleIds.has(r.employeeId))
+    .sort((a,b)=>b.createdAt-a.createdAt);
+
+  main.innerHTML = `
+    <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <div>
+        <div class="page-eyebrow">Overtime Status</div>
+        <h1 class="page-title">연장근무 현황</h1>
+        <p class="page-desc">본인, 본인이 속한 팀의 팀장/지점장, 연장근무 최종승인자, 시스템 관리자, 전체열람 권한자만 조회할 수 있어요.</p>
+      </div>
+      ${visible.length>1 ? `<button class="btn btn-ghost btn-sm" id="export-overtime-excel" style="width:auto; white-space:nowrap;">⬇ 엑셀 다운로드</button>`:''}
+    </div>
+    <div class="card" style="margin-bottom:20px;">
+      <table class="members">
+        <thead><tr><th>이름</th><th>팀</th><th>승인된 연장근무 총 시간</th></tr></thead>
+        <tbody>
+          ${visible.map(e=>{
+            const approvedMins = state.data.requests
+              .filter(r=>r.employeeId===e.id && r.type==='overtime' && r.status==='approved')
+              .reduce((sum,r)=> sum + (r.otMinutes||0), 0);
+            return `
+            <tr>
+              <td><strong>${e.name}</strong>${e.id===state.me.id?' <span style="color:var(--muted); font-size:11px;">(나)</span>':''}</td>
+              <td>${e.team||''}</td>
+              <td style="font-family:var(--mono); color:var(--brand);">${formatMinutes(approvedMins)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="section-title">연장근무 신청 내역</div>
+      <div class="req-list">
+        ${otReqs.length? otReqs.map(r=>reqCardHTML(r,false,false,null,state.me.isAdmin)).join('') : `<div class="empty">연장근무 신청 내역이 없어요.</div>`}
+      </div>
+    </div>
+  `;
+  if(state.me.isAdmin){
+    document.querySelectorAll('[data-admin-cancel]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const r = state.data.requests.find(x=>x.id===btn.dataset.adminCancel);
+        if(!confirm(`${empName(r.employeeId)}님의 승인된 연장근무를 취소할까요?`)) return;
+        r.status = 'cancelled';
+        r.cancelledBy = state.me.id;
+        r.cancelledAt = Date.now();
+        await saveData();
+        showToast('승인을 취소했어요.');
+        renderOvertimeStatus(main);
+      };
+    });
+  }
+  const exportBtn = document.getElementById('export-overtime-excel');
+  if(exportBtn){
+    exportBtn.onclick = ()=>{
+      if(typeof XLSX==='undefined'){ showToast('엑셀 라이브러리를 불러오지 못했어요. 인터넷 연결이 필요해요.'); return; }
+      const summaryRows = visible.map(e=>{
+        const approvedMins = state.data.requests
+          .filter(r=>r.employeeId===e.id && r.type==='overtime' && r.status==='approved')
+          .reduce((sum,r)=> sum + (r.otMinutes||0), 0);
+        return { '이름': e.name, '팀': e.team||'', '승인된 연장근무 총 시간': formatMinutes(approvedMins) };
+      });
+      const detailRows = otReqs.map(r=>({
+        '이름': empName(r.employeeId),
+        '팀': (empById(r.employeeId)||{}).team||'',
+        '날짜': r.startDate,
+        '시작': r.otStart, '종료': r.otEnd,
+        '근무시간': formatMinutes(r.otMinutes||0),
+        '상태': r.status==='approved'?'승인':(r.status==='rejected'?'반려':(r.status==='cancelled'?'취소됨':(r.status==='pending_hr'?'1차승인':'대기중'))),
+        '1차 승인자': empName(r.teamApproverId),
+        '최종 승인자': empName(r.hrApproverId),
+      }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), '요약');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detailRows), '신청내역');
+      XLSX.writeFile(wb, `연장근무현황_${todayStr()}.xlsx`);
+    };
+  }
+}
+
+/* ---------------- APPROVALS ---------------- */
+function renderApprovals(main){
+  const pending = state.data.requests.filter(r=>r.status==='pending'||r.status==='pending_hr').sort((a,b)=>a.createdAt-b.createdAt);
+  const decided = state.data.requests.filter(r=>r.status!=='pending' && r.status!=='pending_hr').sort((a,b)=>b.createdAt-a.createdAt).slice(0,8);
+  main.innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Approvals</div>
+      <h1 class="page-title">승인함</h1>
+      <p class="page-desc">대기 중인 요청 ${pending.length}건이 있어요.</p>
+    </div>
+    <div class="card" style="margin-bottom:20px;">
+      <div class="section-title">결재 대기</div>
+      <div class="req-list" id="pending-list"></div>
+    </div>
+    <div class="card">
+      <div class="section-title">최근 처리 내역</div>
+      <div class="req-list" id="decided-list"></div>
+    </div>
+  `;
+  const pList = document.getElementById('pending-list');
+  pList.innerHTML = pending.length? pending.map(r=>{
+    const iCanAct = canApprove(r);
+    const owner = empById(r.employeeId);
+    let note = null;
+    if(!iCanAct){
+      if(r.type==='overtime'){
+        if(r.status==='pending'){
+          const leader = owner ? findTeamLeader(owner.team) : null;
+          note = leader ? `${leader.name}님(팀장/지점장) 1차 승인 필요` : '팀장/지점장 1차 승인 필요';
+        }else if(r.status==='pending_hr'){
+          note = `${finalApproverName()}님(연장근무 최종승인자) 승인 필요`;
+        }
+      }else{
+        const leader = owner ? findTeamLeader(owner.team) : null;
+        note = leader ? `${leader.name}님(팀장/지점장) 승인 필요` : '담당 팀장/지점장 승인 필요';
+      }
+    }
+    return reqCardHTML(r, false, iCanAct, note);
+  }).join('') : `<div class="empty"><div class="empty-icon">✅</div>처리할 요청이 없어요.</div>`;
+  const dList = document.getElementById('decided-list');
+  dList.innerHTML = decided.length? decided.map(r=>reqCardHTML(r,false,false)).join('') : `<div class="empty">처리 내역이 없어요.</div>`;
+
+  document.querySelectorAll('[data-approve]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const r = state.data.requests.find(x=>x.id===btn.dataset.approve);
+      if(!canApprove(r)){ showToast('이 신청은 본인만 승인할 수 있어요.'); return; }
+      if(r.type==='overtime' && r.status==='pending'){
+        r.teamApproverId=state.me.id; r.teamApprovedAt=Date.now();
+        if(isFinalOvertimeApprover(state.me)){
+          // 1차 승인자가 최종승인자와 동일인이면 두 번 결재할 필요 없이 한 번에 최종승인 처리
+          r.status='approved'; r.hrApproverId=state.me.id; r.hrApprovedAt=Date.now(); r.approverId=state.me.id;
+          await saveData();
+          showToast(`${empName(r.employeeId)}님의 연장근무를 승인했어요.`);
+        }else{
+          r.status='pending_hr';
+          await saveData();
+          showToast(`${empName(r.employeeId)}님의 연장근무를 1차 승인했어요. ${finalApproverName()}님의 최종 승인이 남았어요.`);
+        }
+      }else{
+        r.status='approved'; r.approverId=state.me.id;
+        if(r.type==='overtime') r.hrApproverId=state.me.id;
+        await saveData();
+        showToast(`${empName(r.employeeId)}님의 신청을 승인했어요.`);
+      }
+      renderApprovals(main);
+    };
+  });
+  document.querySelectorAll('[data-reject]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const r = state.data.requests.find(x=>x.id===btn.dataset.reject);
+      if(!canApprove(r)){ showToast('이 신청은 본인만 승인할 수 있어요.'); return; }
+      const reason = prompt('반려 사유를 입력해주세요 (선택)') || '';
+      r.status='rejected'; r.rejectReason=reason; r.approverId=state.me.id;
+      await saveData();
+      showToast(`${empName(r.employeeId)}님의 신청을 반려했어요.`);
+      renderApprovals(main);
+    };
+  });
+}
+
+/* ---------------- CALENDAR ---------------- */
+function renderCalendar(main){
+  main.innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Company Calendar</div>
+      <h1 class="page-title">회사 캘린더</h1>
+      <p class="page-desc">구성원들의 승인/대기 중인 근태를 한눈에 확인하세요.</p>
+    </div>
+    <div class="card">
+      <div class="cal-head">
+        <div class="cal-nav">
+          <button class="btn btn-ghost btn-sm" id="cal-prev" style="width:auto;">‹ 이전</button>
+          <div class="cal-month">${state.calYear}.${String(state.calMonth+1).padStart(2,'0')}</div>
+          <button class="btn btn-ghost btn-sm" id="cal-next" style="width:auto;">다음 ›</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="cal-today" style="width:auto;">오늘</button>
+      </div>
+      <div class="cal-grid" id="cal-body"></div>
+      <div class="legend">
+        ${Object.entries(LEAVE_TYPES).filter(([key])=>key!=='overtime').map(([key,t])=>`<div class="legend-item"><span class="legend-dot" style="background:${t.color};"></span>${t.label}</div>`).join('')}
+        <div class="legend-item"><span class="legend-dot" style="background:var(--stamp-red);"></span>일요일/공휴일</div>
+        <div class="legend-item"><span class="legend-dot" style="background:var(--sat-blue);"></span>토요일</div>
+      </div>
+    </div>
+  `;
+  document.getElementById('cal-prev').onclick=()=>{ shiftMonth(-1); renderCalendar(main); };
+  document.getElementById('cal-next').onclick=()=>{ shiftMonth(1); renderCalendar(main); };
+  document.getElementById('cal-today').onclick=()=>{ const n=new Date(); state.calYear=n.getFullYear(); state.calMonth=n.getMonth(); renderCalendar(main); };
+  buildCalGrid();
+}
+function shiftMonth(delta){
+  let m = state.calMonth + delta, y = state.calYear;
+  if(m<0){ m=11; y--; } if(m>11){ m=0; y++; }
+  state.calMonth=m; state.calYear=y;
+}
+function buildCalGrid(){
+  const body = document.getElementById('cal-body');
+  const year=state.calYear, month=state.calMonth;
+  const first = new Date(year,month,1);
+  const startOffset = first.getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const prevDays = new Date(year, month, 0).getDate();
+  const now = new Date();
+  let html = ['일','월','화','수','목','금','토'].map(d=>`<div class="cal-dow">${d}</div>`).join('');
+
+  const totalCells = Math.ceil((startOffset+daysInMonth)/7)*7;
+  for(let i=0;i<totalCells;i++){
+    const cellIndex = i - startOffset + 1;
+    let dateObj, otherMonth=false;
+    if(cellIndex<1){ dateObj=new Date(year, month-1, prevDays+cellIndex); otherMonth=true; }
+    else if(cellIndex>daysInMonth){ dateObj=new Date(year, month+1, cellIndex-daysInMonth); otherMonth=true; }
+    else { dateObj=new Date(year, month, cellIndex); }
+    const dateStr = fmtDate(dateObj);
+    const isToday = dateStr===fmtDate(now);
+    const dow = dateObj.getDay();
+    const holiday = isHoliday(dateStr);
+    let numColor = 'var(--ink-soft)';
+    if(dow===0) numColor = 'var(--stamp-red)';
+    if(dow===6) numColor = 'var(--sat-blue)';
+    if(holiday) numColor = 'var(--stamp-red)';
+    const dayReqs = state.data.requests.filter(r=> r.status!=='rejected' && r.status!=='cancelled' && r.type!=='overtime' && dateStr>=r.startDate && dateStr<=r.endDate);
+    html += `<div class="cal-cell ${otherMonth?'other-month':''} ${isToday?'today':''}" data-date="${dateStr}" style="cursor:pointer;">
+      <div class="cal-daynum" style="color:${numColor}; font-weight:${holiday?'800':'600'};">${dateObj.getDate()}${holiday? ` <span style="font-size:9px; font-weight:700;">${state.data.holidays.find(h=>h.date===dateStr).label}</span>`:''}</div>
+      ${dayReqs.slice(0,3).map(r=>{
+        const t=LEAVE_TYPES[r.type];
+        const opacity = (r.status==='pending'||r.status==='pending_hr')? '0.55':'1';
+        let typeLabel = t.label;
+        if(r.type==='half'){
+          typeLabel = r.halfType==='am' ? '오전반차' : (r.halfType==='pm' ? '오후반차' : '분할반차');
+        }
+        return `<div class="cal-tag" style="background:${t.color}; color:#fff; opacity:${opacity};">${empName(r.employeeId)} · ${typeLabel}${r.isBackdated? ' (사후)':''}</div>`;
+      }).join('')}
+      ${dayReqs.length>3? `<div class="cal-tag" style="background:var(--gray-soft); color:var(--ink-soft);">+${dayReqs.length-3}명</div>`:''}
+    </div>`;
+  }
+  body.innerHTML = html;
+  document.querySelectorAll('.cal-cell[data-date]').forEach(cell=>{
+    cell.onclick = ()=> showDayDetailModal(cell.dataset.date);
+  });
+}
+
+function showDayDetailModal(dateStr){
+  const old = document.getElementById('day-detail-modal');
+  if(old) old.remove();
+  const dayReqs = state.data.requests.filter(r=> r.status!=='rejected' && r.status!=='cancelled' && r.type!=='overtime' && dateStr>=r.startDate && dateStr<=r.endDate);
+  const holiday = isHoliday(dateStr);
+  const holidayLabel = holiday? state.data.holidays.find(h=>h.date===dateStr).label : null;
+  const d = parseDate(dateStr);
+  const dowLabel = ['일','월','화','수','목','금','토'][d.getDay()];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'day-detail-modal';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:520px; text-align:left;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+        <div>
+          <div style="font-family:var(--mono); font-size:13px; color:var(--muted);">${dateStr} (${dowLabel})${holidayLabel? ` · ${holidayLabel}`:''}</div>
+          <div style="font-weight:800; font-size:18px;">이 날짜의 근태 현황</div>
+        </div>
+        <button class="btn btn-sm btn-ghost" id="day-modal-close" style="width:auto;">닫기</button>
+      </div>
+      <div class="req-list" style="max-height:60vh; overflow-y:auto;">
+        ${dayReqs.length? dayReqs.map(r=>reqCardHTML(r,false,false)).join('') : `<div class="empty">이 날짜에 등록된 근태가 없어요.</div>`}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = ()=> overlay.remove();
+  document.getElementById('day-modal-close').onclick = close;
+  overlay.onclick = (e)=>{ if(e.target===overlay) close(); };
+}
+
+/* ---------------- ACCOUNT SETTINGS ---------------- */
+function renderAccountSettings(main){
+  main.innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Account</div>
+      <h1 class="page-title">계정설정</h1>
+      <p class="page-desc">${state.me.name}님 (사번 ${state.me.empNo}) · 비밀번호 변경</p>
+    </div>
+    <div class="card form-card">
+      <div class="field">
+        <label>현재 비밀번호</label>
+        <input type="password" id="pw-current">
+      </div>
+      <div class="field">
+        <label>새 비밀번호 (5자 이상)</label>
+        <input type="password" id="pw-new">
+      </div>
+      <div class="field">
+        <label>새 비밀번호 확인</label>
+        <input type="password" id="pw-confirm">
+      </div>
+      <button class="btn btn-primary" id="pw-submit">비밀번호 변경</button>
+      <div class="hint" style="margin-top:14px;">비밀번호를 잊어버렸다면 스스로 찾을 수 없고, <strong>시스템 관리자에게 요청해 초기화(기본값: ${DEFAULT_PASSWORD})</strong>받아야 해요. 초기화 후 다시 로그인해서 이 화면에서 새 비밀번호로 바꿔주세요.</div>
+    </div>
+  `;
+  document.getElementById('pw-submit').onclick = async ()=>{
+    const current = document.getElementById('pw-current').value;
+    const next = document.getElementById('pw-new').value;
+    const confirm2 = document.getElementById('pw-confirm').value;
+    if(current !== state.me.password){ showToast('현재 비밀번호가 올바르지 않아요.'); return; }
+    if(next.length < 5){ showToast('새 비밀번호는 5자 이상이어야 해요.'); return; }
+    if(next !== confirm2){ showToast('새 비밀번호가 서로 일치하지 않아요.'); return; }
+    state.me.password = next;
+    await saveData();
+    showToast('비밀번호를 변경했어요.');
+    document.getElementById('pw-current').value = '';
+    document.getElementById('pw-new').value = '';
+    document.getElementById('pw-confirm').value = '';
+  };
+}
+
+/* ---------------- MEMBERS (admin) ---------------- */
+function renderMembers(main){
+  const teamList = [...new Set(state.data.employees.map(e=>e.team).filter(Boolean))];
+  main.innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Admin</div>
+      <h1 class="page-title">구성원 관리</h1>
+      <p class="page-desc">승인자 권한과 연간 연차 일수를 설정하세요. 구성원 등록은 관리자만 할 수 있어요.</p>
+    </div>
+    <div class="card" style="margin-bottom:20px;">
+      <div class="section-title">구성원 추가</div>
+      <div class="field row-2">
+        <div>
+          <label style="display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px;">사번</label>
+          <input type="text" id="new-member-empno" placeholder="예: 05" inputmode="numeric" maxlength="2">
+        </div>
+        <div>
+          <label style="display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px;">이름</label>
+          <input type="text" id="new-member-name" placeholder="이름을 입력하세요">
+        </div>
+      </div>
+      <div class="field row-2">
+        <div>
+          <label style="display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px;">직책</label>
+          <select id="new-member-position">
+            <option value="팀원">팀원</option>
+            <option value="팀장">팀장</option>
+            <option value="지점장">지점장</option>
+            <option value="대표이사">대표이사</option>
+            <option value="부사장">부사장</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px;">초기 비밀번호</label>
+          <input type="text" id="new-member-password" value="${DEFAULT_PASSWORD}">
+        </div>
+      </div>
+      <div class="field">
+        <label style="display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px;">소속 팀/지점</label>
+        <input type="text" id="new-member-team" list="team-options" placeholder="예: 영업지원팀">
+        <datalist id="team-options">${teamList.map(t=>`<option value="${t}">`).join('')}</datalist>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="add-member" style="width:auto;">+ 구성원 추가</button>
+    </div>
+    <div class="card" style="margin-bottom:20px;">
+      <table class="members">
+        <thead><tr><th>사번</th><th>이름</th><th>팀</th><th>직책</th><th>권한</th><th>총연차</th><th>사용갯수</th><th>잔여연차</th><th></th></tr></thead>
+        <tbody id="members-body"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="section-title">공휴일 관리 <span style="font-size:11.5px; color:var(--muted); font-weight:600;">연차 영업일 계산에서 자동으로 제외돼요</span></div>
+      <p class="hint" style="margin-bottom:14px;">제헌절처럼 공휴일 지정이 바뀌면 여기서 바로 추가·삭제할 수 있어요. 국가에서 공휴일 지정을 변경해도 자동으로 반영되지 않으니, 변경 소식을 들으면 직접 수정해주세요.</p>
+      <div class="row-2" style="margin-bottom:14px;">
+        <div>
+          <label style="display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px;">날짜</label>
+          <input type="date" id="new-holiday-date">
+        </div>
+        <div>
+          <label style="display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px;">이름</label>
+          <input type="text" id="new-holiday-label" placeholder="예: 제헌절">
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="add-holiday" style="width:auto; margin-bottom:16px;">+ 공휴일 추가</button>
+      <div id="holiday-list"></div>
+    </div>
+  `;
+  const body = document.getElementById('members-body');
+  const sortedEmployees = state.data.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  body.innerHTML = sortedEmployees.map(e=>{
+    const used = annualUsed(e.id);
+    const remain = (e.annualTotal - used).toFixed(1).replace(/\.0$/,'');
+    return `
+    <tr>
+      <td style="font-family:var(--mono); color:var(--ink-soft);">${e.empNo||''}</td>
+      <td><strong>${e.name}</strong>${e.id===state.me.id?' <span style="color:var(--muted); font-size:11px;">(나)</span>':''}</td>
+      <td><input type="text" class="balance-input" style="width:88px;" data-team="${e.id}" value="${e.team||''}"></td>
+      <td>
+        <select data-position="${e.id}" style="padding:5px 6px; border-radius:7px; border:1.5px solid var(--line); font-size:12.5px;">
+          <option value="팀원" ${e.position==='팀원'?'selected':''}>팀원</option>
+          <option value="팀장" ${e.position==='팀장'?'selected':''}>팀장</option>
+          <option value="지점장" ${e.position==='지점장'?'selected':''}>지점장</option>
+          <option value="대표이사" ${e.position==='대표이사'?'selected':''}>대표이사</option>
+          <option value="부사장" ${e.position==='부사장'?'selected':''}>부사장</option>
+        </select>
+      </td>
+      <td>
+        <button class="toggle-btn ${e.isApprover?'on':''}" data-toggle-approver="${e.id}">승인자</button>
+        <button class="toggle-btn ${e.isHrApprover?'on':''}" data-toggle-hr="${e.id}" style="margin-top:4px;">연장근무 최종승인</button>
+        <button class="toggle-btn ${e.isFullViewer?'on':''}" data-toggle-fullview="${e.id}" style="margin-top:4px;">연차/연장근무 전체열람</button>
+        <button class="toggle-btn ${e.isAdmin?'on':''}" data-toggle-admin="${e.id}" style="margin-top:4px;">시스템 관리자</button>
+      </td>
+      <td><input type="text" inputmode="decimal" class="balance-input" data-balance="${e.id}" value="${e.annualTotal}"></td>
+      <td><input type="text" inputmode="decimal" class="balance-input" data-baseused="${e.id}" value="${e.baseUsed||0}"></td>
+      <td style="font-family:var(--mono); color:var(--ink-soft);">${remain}일 (${daysToHours(e.annualTotal-used)}시간)</td>
+      <td>
+        <button class="btn btn-sm btn-ghost" data-reset-pw="${e.id}" style="width:auto; margin-bottom:4px;">PW 초기화</button>
+        ${!e.isAdmin? `<button class="btn btn-sm btn-danger" data-remove="${e.id}">삭제</button>`:''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.querySelectorAll('[data-toggle-approver]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const e = empById(btn.dataset.toggleApprover);
+      e.isApprover = !e.isApprover;
+      await saveData();
+      renderMembers(main);
+    };
+  });
+  document.querySelectorAll('[data-toggle-hr]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const e = empById(btn.dataset.toggleHr);
+      e.isHrApprover = !e.isHrApprover;
+      await saveData();
+      showToast(e.isHrApprover? `${e.name}님을 연장근무 최종승인자로 지정했어요.` : `${e.name}님의 연장근무 최종승인자 지정을 해제했어요.`);
+      renderMembers(main);
+    };
+  });
+  document.querySelectorAll('[data-toggle-fullview]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const e = empById(btn.dataset.toggleFullview);
+      e.isFullViewer = !e.isFullViewer;
+      await saveData();
+      showToast(e.isFullViewer? `${e.name}님에게 연차/연장근무 전체열람 권한을 부여했어요.` : `${e.name}님의 전체열람 권한을 해제했어요.`);
+      renderMembers(main);
+    };
+  });
+  document.querySelectorAll('[data-toggle-admin]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const e = empById(btn.dataset.toggleAdmin);
+      const adminCount = state.data.employees.filter(x=>x.isAdmin).length;
+      if(e.isAdmin && adminCount<=1){ showToast('최소 1명의 시스템 관리자가 있어야 해요.'); return; }
+      e.isAdmin = !e.isAdmin;
+      await saveData();
+      showToast(e.isAdmin? `${e.name}님을 시스템 관리자로 지정했어요.` : `${e.name}님의 시스템 관리자 권한을 해제했어요.`);
+      renderMembers(main);
+    };
+  });
+  document.querySelectorAll('[data-reset-pw]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const e = empById(btn.dataset.resetPw);
+      e.password = DEFAULT_PASSWORD;
+      await saveData();
+      showToast(`${e.name}님의 비밀번호를 기본값(${DEFAULT_PASSWORD})으로 초기화했어요.`);
+    };
+  });
+  document.querySelectorAll('[data-balance]').forEach(inp=>{
+    inp.onchange = async ()=>{
+      const e = empById(inp.dataset.balance);
+      const v = parseFloat(inp.value);
+      if(!isNaN(v) && v>=0){ e.annualTotal = v; await saveData(); showToast('연차 일수를 수정했어요.'); }
+      renderMembers(main);
+    };
+  });
+  document.querySelectorAll('[data-baseused]').forEach(inp=>{
+    inp.onchange = async ()=>{
+      const e = empById(inp.dataset.baseused);
+      const v = parseFloat(inp.value);
+      if(!isNaN(v) && v>=0){ e.baseUsed = v; await saveData(); showToast('사용갯수를 수정했어요.'); }
+      renderMembers(main);
+    };
+  });
+  document.querySelectorAll('[data-team]').forEach(inp=>{
+    inp.onchange = async ()=>{
+      const e = empById(inp.dataset.team);
+      e.team = inp.value.trim();
+      await saveData();
+      renderMembers(main);
+    };
+  });
+  document.querySelectorAll('[data-position]').forEach(sel=>{
+    sel.onchange = async ()=>{
+      const e = empById(sel.dataset.position);
+      e.position = sel.value;
+      e.isApprover = LEADER_POSITIONS.includes(e.position);
+      await saveData();
+      showToast('직책과 결재권을 함께 수정했어요.');
+      renderMembers(main);
+    };
+  });
+  document.querySelectorAll('[data-remove]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      if(!confirm('이 구성원을 삭제할까요? 신청 내역은 유지돼요.')) return;
+      state.data.employees = state.data.employees.filter(e=>e.id!==btn.dataset.remove);
+      await saveData();
+      renderMembers(main);
+    };
+  });
+
+  document.getElementById('add-member').onclick = async ()=>{
+    const empNoRaw = document.getElementById('new-member-empno').value.trim();
+    const empNo = empNoRaw.padStart(2, '0');
+    const name = document.getElementById('new-member-name').value.trim();
+    const position = document.getElementById('new-member-position').value;
+    const password = document.getElementById('new-member-password').value.trim() || DEFAULT_PASSWORD;
+    const team = document.getElementById('new-member-team').value.trim() || '미지정';
+    if(!empNoRaw){ showToast('사번을 입력해주세요.'); return; }
+    if(!name){ showToast('이름을 입력해주세요.'); return; }
+    if(state.data.employees.some(e=>String(e.empNo).padStart(2,'0')===empNo)){ showToast('이미 등록된 사번이에요.'); return; }
+    const newEmp = {
+      id: uid('emp'), empNo, name, team, position, password,
+      isAdmin: false, isApprover: LEADER_POSITIONS.includes(position),
+      isHrApprover: false, annualTotal: 15, baseUsed: 0
+    };
+    state.data.employees.push(newEmp);
+    await saveData();
+    showToast(`${name}님을 구성원으로 추가했어요.`);
+    renderMembers(main);
+  };
+
+  renderHolidayList();
+  document.getElementById('add-holiday').onclick = async ()=>{
+    const date = document.getElementById('new-holiday-date').value;
+    const label = document.getElementById('new-holiday-label').value.trim();
+    if(!date || !label){ showToast('날짜와 이름을 모두 입력해주세요.'); return; }
+    if(!state.data.holidays) state.data.holidays = [];
+    if(state.data.holidays.some(h=>h.date===date)){ showToast('이미 등록된 날짜예요.'); return; }
+    state.data.holidays.push({date, label});
+    state.data.holidays.sort((a,b)=> a.date.localeCompare(b.date));
+    await saveData();
+    showToast('공휴일을 추가했어요.');
+    renderMembers(main);
+  };
+}
+function renderHolidayList(){
+  const list = document.getElementById('holiday-list');
+  const holidays = (state.data.holidays||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
+  if(holidays.length===0){
+    list.innerHTML = `<div class="empty">등록된 공휴일이 없어요.</div>`;
+    return;
+  }
+  list.innerHTML = holidays.map(h=>`
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 4px; border-bottom:1px solid var(--line); font-size:13.5px;">
+      <div><span style="font-family:var(--mono); color:var(--ink-soft); margin-right:10px;">${h.date}</span>${h.label}</div>
+      <button class="btn btn-sm btn-danger" data-remove-holiday="${h.date}">삭제</button>
+    </div>
+  `).join('');
+  document.querySelectorAll('[data-remove-holiday]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      state.data.holidays = state.data.holidays.filter(h=>h.date!==btn.dataset.removeHoliday);
+      await saveData();
+      showToast('공휴일을 삭제했어요.');
+      renderHolidayList();
+    };
+  });
+}
+
+/* ---------------- INIT ---------------- */
+async function init(){
+  document.getElementById('app').innerHTML = `<div class="login-wrap"><div style="color:#8A93A6; font-family:var(--mono);">불러오는 중…</div></div>`;
+  await loadData();
+  const myId = await loadIdentity();
+  if(myId){
+    const e = empById(myId);
+    if(e){ state.me = e; renderApp(); return; }
+  }
+  renderLogin();
+}
+init();
+</script>
+</body>
+</html>
