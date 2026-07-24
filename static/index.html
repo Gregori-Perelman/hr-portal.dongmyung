@@ -442,15 +442,15 @@ const DEFAULT_PASSWORD = 'dmbrg';
 const ORG_VERSION = 3; // 조직도가 바뀌면 이 값을 올려서 자동 재시딩
 
 const SEED_EMPLOYEES = [
-  { empNo:'09', name:'이동원',    team:'본사',       position:'대표이사', annualTotal:0, isAdmin:true },
+  { empNo:'09', name:'이동원',    team:'본사',       position:'대표이사', annualTotal:0, isAdmin:true, canUploadRoster:true },
   { empNo:'21', name:'허재관',    team:'본사',       position:'부사장', annualTotal:22 },
   { empNo:'41', name:'심대흥',    team:'본사영업부',  position:'팀원',  annualTotal:16 },
   { empNo:'33', name:'신상무',    team:'서울지점',    position:'지점장', annualTotal:19 },
-  { empNo:'10', name:'정나은',    team:'영업지원팀',  position:'팀장',  annualTotal:25, isHrApprover:true, isAdmin:true },
+  { empNo:'10', name:'정나은',    team:'영업지원팀',  position:'팀장',  annualTotal:25, isHrApprover:true, isAdmin:true, canUploadRoster:true },
   { empNo:'54', name:'구현',      team:'물류팀',      position:'팀장',  annualTotal:18 },
-  { empNo:'05',  name:'김남홍',    team:'영업지원팀',  position:'팀원',  annualTotal:25, isFullViewer:true },
+  { empNo:'05',  name:'김남홍',    team:'영업지원팀',  position:'팀원',  annualTotal:25, isFullViewer:true, canUploadRoster:true },
   { empNo:'13', name:'김성준YB',  team:'본사영업부',  position:'팀장',  annualTotal:24 },
-  { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true },
+  { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true, canUploadRoster:true },
   { empNo:'26', name:'정태건',    team:'FA시스템팀',  position:'팀장',  annualTotal:18 },
   { empNo:'16', name:'강현동',    team:'물류팀',      position:'팀원',  annualTotal:23 },
   { empNo:'23', name:'여승현',    team:'물류팀',      position:'팀원',  annualTotal:21 },
@@ -745,6 +745,7 @@ function buildSeedEmployees(){
     isApprover: LEADER_POSITIONS.includes(s.position),
     isHrApprover: !!s.isHrApprover,
     isFullViewer: !!s.isFullViewer,
+    canUploadRoster: !!s.canUploadRoster,
     annualTotal: s.annualTotal, baseUsed: 0,
   }));
 }
@@ -837,6 +838,15 @@ async function loadData(){
       state.data.fixedDec26YearV1 = true;
       await saveData();
     }
+    if(!state.data.grantedRosterUploadV1){
+      // 이동원, 이동현, 정나은, 김남홍에게 구성원 엑셀 일괄 업로드 권한 부여
+      const targets = ['09','40','10','05'];
+      state.data.employees.forEach(e=>{
+        if(targets.includes(String(e.empNo).padStart(2,'0'))){ e.canUploadRoster = true; }
+      });
+      state.data.grantedRosterUploadV1 = true;
+      await saveData();
+    }
   }catch(e){
     const freshEmployees = buildSeedEmployees();
     const freshRequests = [];
@@ -853,7 +863,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch2: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch2: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true };
     await saveData();
   }
 }
@@ -983,7 +993,7 @@ function navItems(){
   if(state.me.isApprover) items.push({id:'approvals', icon:'✓', label:'승인함', badge: myPendingCount()});
   items.push({id:'calendar', icon:'▦', label:'회사 캘린더'});
   items.push({id:'account', icon:'🔑', label:'계정설정'});
-  if(state.me.isAdmin) items.push({id:'members', icon:'☺', label:'구성원 관리'});
+  if(state.me.isAdmin || state.me.canUploadRoster) items.push({id:'members', icon:'☺', label:'구성원 관리'});
   return items;
 }
 
@@ -1890,6 +1900,19 @@ function renderMembers(main){
       <h1 class="page-title">구성원 관리</h1>
       <p class="page-desc">승인자 권한과 연간 연차 일수를 설정하세요. 구성원 등록은 관리자만 할 수 있어요.</p>
     </div>
+    ${state.me.canUploadRoster ? `
+    <div class="card" style="margin-bottom:20px;">
+      <div class="section-title">엑셀로 조직도 일괄 업로드 <span style="font-size:11.5px; color:var(--muted); font-weight:600;">이동원·이동현·정나은·김남홍만 사용 가능</span></div>
+      <p class="hint" style="margin-bottom:14px;">
+        엑셀 열 구성: <strong>사번, 이름, 부서, 직책, 총연차</strong> (첫 행은 제목행). 사번이 이미 있는 사람은 정보가 갱신되고,
+        없는 사번은 새로 추가돼요. <strong>목록에 없다고 기존 구성원이 삭제되진 않아요.</strong>
+      </p>
+      <button class="btn btn-ghost btn-sm" id="download-roster-template" style="width:auto; margin-bottom:14px;">⬇ 엑셀 업로드 양식 다운로드</button>
+      <input type="file" id="roster-excel-input" accept=".xlsx,.xls">
+      <div class="hint" id="roster-upload-result" style="margin-top:10px;"></div>
+    </div>
+    `:''}
+    ${state.me.isAdmin ? `
     <div class="card" style="margin-bottom:20px;">
       <div class="section-title">구성원 추가</div>
       <div class="field row-2">
@@ -1947,8 +1970,10 @@ function renderMembers(main){
       <button class="btn btn-ghost btn-sm" id="add-holiday" style="width:auto; margin-bottom:16px;">+ 공휴일 추가</button>
       <div id="holiday-list"></div>
     </div>
+    `:''}
   `;
   const body = document.getElementById('members-body');
+  if(body){
   const sortedEmployees = state.data.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
   body.innerHTML = sortedEmployees.map(e=>{
     const used = annualUsed(e.id);
@@ -2070,41 +2095,116 @@ function renderMembers(main){
       renderMembers(main);
     };
   });
+  } // end if(body)
 
-  document.getElementById('add-member').onclick = async ()=>{
-    const empNoRaw = document.getElementById('new-member-empno').value.trim();
-    const empNo = empNoRaw.padStart(2, '0');
-    const name = document.getElementById('new-member-name').value.trim();
-    const position = document.getElementById('new-member-position').value;
-    const password = document.getElementById('new-member-password').value.trim() || DEFAULT_PASSWORD;
-    const team = document.getElementById('new-member-team').value.trim() || '미지정';
-    if(!empNoRaw){ showToast('사번을 입력해주세요.'); return; }
-    if(!name){ showToast('이름을 입력해주세요.'); return; }
-    if(state.data.employees.some(e=>String(e.empNo).padStart(2,'0')===empNo)){ showToast('이미 등록된 사번이에요.'); return; }
-    const newEmp = {
-      id: uid('emp'), empNo, name, team, position, password,
-      isAdmin: false, isApprover: LEADER_POSITIONS.includes(position),
-      isHrApprover: false, annualTotal: 15, baseUsed: 0
+  const templateBtn = document.getElementById('download-roster-template');
+  if(templateBtn){
+    templateBtn.onclick = ()=>{
+      if(typeof XLSX==='undefined'){ showToast('엑셀 라이브러리를 불러오지 못했어요. 인터넷 연결이 필요해요.'); return; }
+      const sample = [
+        { '사번':'01', '이름':'홍길동', '부서':'영업1팀', '직책':'팀원', '총연차':15 },
+        { '사번':'02', '이름':'김철수', '부서':'영업1팀', '직책':'팀장', '총연차':20 },
+      ];
+      const ws = XLSX.utils.json_to_sheet(sample);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+      XLSX.writeFile(wb, '구성원_업로드_양식.xlsx');
     };
-    state.data.employees.push(newEmp);
-    await saveData();
-    showToast(`${name}님을 구성원으로 추가했어요.`);
-    renderMembers(main);
-  };
+  }
+  const rosterInput = document.getElementById('roster-excel-input');
+  if(rosterInput){
+    rosterInput.onchange = async ()=>{
+      const file = rosterInput.files[0];
+      if(!file) return;
+      const resultBox = document.getElementById('roster-upload-result');
+      resultBox.textContent = '처리 중...';
+      try{
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
-  renderHolidayList();
-  document.getElementById('add-holiday').onclick = async ()=>{
-    const date = document.getElementById('new-holiday-date').value;
-    const label = document.getElementById('new-holiday-label').value.trim();
-    if(!date || !label){ showToast('날짜와 이름을 모두 입력해주세요.'); return; }
-    if(!state.data.holidays) state.data.holidays = [];
-    if(state.data.holidays.some(h=>h.date===date)){ showToast('이미 등록된 날짜예요.'); return; }
-    state.data.holidays.push({date, label});
-    state.data.holidays.sort((a,b)=> a.date.localeCompare(b.date));
-    await saveData();
-    showToast('공휴일을 추가했어요.');
-    renderMembers(main);
-  };
+        let updated = 0, added = 0, skipped = 0;
+        rows.forEach(row=>{
+          const empNoRaw = String(row['사번']||'').trim();
+          if(!empNoRaw){ skipped++; return; }
+          const empNo = empNoRaw.padStart(2,'0');
+          const name = String(row['이름']||'').trim();
+          const team = String(row['부서']||'').trim();
+          const position = String(row['직책']||'').trim();
+          const annualTotalRaw = row['총연차'];
+          const annualTotal = annualTotalRaw!=='' && annualTotalRaw!=null ? Number(annualTotalRaw) : null;
+          if(!name){ skipped++; return; }
+
+          const existing = state.data.employees.find(e=>String(e.empNo).padStart(2,'0')===empNo);
+          if(existing){
+            existing.name = name || existing.name;
+            existing.team = team || existing.team;
+            if(position){
+              existing.position = position;
+              existing.isApprover = LEADER_POSITIONS.includes(position);
+            }
+            if(annualTotal!=null && !isNaN(annualTotal)) existing.annualTotal = annualTotal;
+            updated++;
+          }else{
+            state.data.employees.push({
+              id: uid('emp'), empNo, password: DEFAULT_PASSWORD,
+              name, team, position: position||'팀원',
+              isAdmin:false, isApprover: LEADER_POSITIONS.includes(position),
+              isHrApprover:false, isFullViewer:false, canUploadRoster:false,
+              annualTotal: (annualTotal!=null && !isNaN(annualTotal))? annualTotal : 15,
+              baseUsed:0
+            });
+            added++;
+          }
+        });
+
+        await saveData();
+        resultBox.innerHTML = `<strong style="color:var(--green);">완료:</strong> 갱신 ${updated}명 · 신규 추가 ${added}명${skipped? ` · 건너뜀 ${skipped}행(사번/이름 누락)`:''}`;
+        showToast('구성원 정보를 엑셀로 일괄 반영했어요.');
+        renderMembers(main);
+      }catch(err){
+        console.error(err);
+        resultBox.innerHTML = `<span style="color:var(--stamp-red);">엑셀 처리 중 오류가 발생했어요. 열 이름(사번/이름/부서/직책/총연차)을 확인해주세요.</span>`;
+      }
+    };
+  }
+  if(state.me.isAdmin){
+    document.getElementById('add-member').onclick = async ()=>{
+      const empNoRaw = document.getElementById('new-member-empno').value.trim();
+      const empNo = empNoRaw.padStart(2, '0');
+      const name = document.getElementById('new-member-name').value.trim();
+      const position = document.getElementById('new-member-position').value;
+      const password = document.getElementById('new-member-password').value.trim() || DEFAULT_PASSWORD;
+      const team = document.getElementById('new-member-team').value.trim() || '미지정';
+      if(!empNoRaw){ showToast('사번을 입력해주세요.'); return; }
+      if(!name){ showToast('이름을 입력해주세요.'); return; }
+      if(state.data.employees.some(e=>String(e.empNo).padStart(2,'0')===empNo)){ showToast('이미 등록된 사번이에요.'); return; }
+      const newEmp = {
+        id: uid('emp'), empNo, name, team, position, password,
+        isAdmin: false, isApprover: LEADER_POSITIONS.includes(position),
+        isHrApprover: false, annualTotal: 15, baseUsed: 0
+      };
+      state.data.employees.push(newEmp);
+      await saveData();
+      showToast(`${name}님을 구성원으로 추가했어요.`);
+      renderMembers(main);
+    };
+
+    renderHolidayList();
+    document.getElementById('add-holiday').onclick = async ()=>{
+      const date = document.getElementById('new-holiday-date').value;
+      const label = document.getElementById('new-holiday-label').value.trim();
+      if(!date || !label){ showToast('날짜와 이름을 모두 입력해주세요.'); return; }
+      if(!state.data.holidays) state.data.holidays = [];
+      if(state.data.holidays.some(h=>h.date===date)){ showToast('이미 등록된 날짜예요.'); return; }
+      state.data.holidays.push({date, label});
+      state.data.holidays.sort((a,b)=> a.date.localeCompare(b.date));
+      await saveData();
+      showToast('공휴일을 추가했어요.');
+      renderMembers(main);
+    };
+  }
 }
 function renderHolidayList(){
   const list = document.getElementById('holiday-list');
