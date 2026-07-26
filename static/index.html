@@ -446,11 +446,11 @@ const SEED_EMPLOYEES = [
   { empNo:'21', name:'허재관',    team:'본사',       position:'부사장', annualTotal:22 },
   { empNo:'41', name:'심대흥',    team:'본사영업부',  position:'팀원',  annualTotal:16 },
   { empNo:'33', name:'신상무',    team:'서울지점',    position:'지점장', annualTotal:19 },
-  { empNo:'10', name:'정나은',    team:'영업지원팀',  position:'팀장',  annualTotal:25, isHrApprover:true, isAdmin:true, canUploadRoster:true },
+  { empNo:'10', name:'정나은',    team:'영업지원팀',  position:'팀장',  annualTotal:25, isHrApprover:true, isAdmin:true, canUploadRoster:true, canCancelApproved:true },
   { empNo:'54', name:'구현',      team:'물류팀',      position:'팀장',  annualTotal:18 },
   { empNo:'05',  name:'김남홍',    team:'영업지원팀',  position:'팀원',  annualTotal:25, isFullViewer:true, canUploadRoster:true },
   { empNo:'13', name:'김성준YB',  team:'본사영업부',  position:'팀장',  annualTotal:24 },
-  { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true, canUploadRoster:true },
+  { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true, canUploadRoster:true, canCancelApproved:true },
   { empNo:'26', name:'정태건',    team:'FA시스템팀',  position:'팀장',  annualTotal:18 },
   { empNo:'16', name:'강현동',    team:'물류팀',      position:'팀원',  annualTotal:23 },
   { empNo:'23', name:'여승현',    team:'물류팀',      position:'팀원',  annualTotal:21 },
@@ -746,6 +746,7 @@ function buildSeedEmployees(){
     isHrApprover: !!s.isHrApprover,
     isFullViewer: !!s.isFullViewer,
     canUploadRoster: !!s.canUploadRoster,
+    canCancelApproved: !!s.canCancelApproved,
     annualTotal: s.annualTotal, baseUsed: 0,
   }));
 }
@@ -847,6 +848,15 @@ async function loadData(){
       state.data.grantedRosterUploadV1 = true;
       await saveData();
     }
+    if(!state.data.restrictedCancelApprovedV1){
+      // 승인된 신청 취소 권한은 정나은, 이동현에게만 있어야 함(이동원 등 다른 관리자는 제외)
+      state.data.employees.forEach(e=>{
+        const empNoP = String(e.empNo).padStart(2,'0');
+        e.canCancelApproved = (empNoP==='10' || empNoP==='40');
+      });
+      state.data.restrictedCancelApprovedV1 = true;
+      await saveData();
+    }
   }catch(e){
     const freshEmployees = buildSeedEmployees();
     const freshRequests = [];
@@ -863,7 +873,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch2: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch2: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true };
     await saveData();
   }
 }
@@ -1541,16 +1551,16 @@ function renderLeaveStatus(main){
         </tbody>
       </table>
     </div>
-    ${state.me.isAdmin ? `
+    ${state.me.canCancelApproved ? `
     <div class="card">
-      <div class="section-title">승인된 신청 관리 <span style="font-size:11.5px; color:var(--muted); font-weight:600;">시스템 관리자만 보여요 · 사유가 생겨 취소하면 연차가 다시 잔여로 돌아가요</span></div>
+      <div class="section-title">승인된 신청 관리 <span style="font-size:11.5px; color:var(--muted); font-weight:600;">정나은·이동현만 보여요 · 사유가 생겨 취소하면 연차가 다시 잔여로 돌아가요</span></div>
       <div class="req-list">
         ${approvedReqs.length? approvedReqs.map(r=>reqCardHTML(r,false,false,null,true)).join('') : `<div class="empty">승인된 신청이 없어요.</div>`}
       </div>
     </div>
     `:''}
   `;
-  if(state.me.isAdmin){
+  if(state.me.canCancelApproved){
     document.querySelectorAll('[data-admin-cancel]').forEach(btn=>{
       btn.onclick = async ()=>{
         const r = state.data.requests.find(x=>x.id===btn.dataset.adminCancel);
@@ -1632,11 +1642,11 @@ function renderOvertimeStatus(main){
     <div class="card">
       <div class="section-title">연장근무 신청 내역</div>
       <div class="req-list">
-        ${otReqs.length? otReqs.map(r=>reqCardHTML(r,false,false,null,state.me.isAdmin)).join('') : `<div class="empty">연장근무 신청 내역이 없어요.</div>`}
+        ${otReqs.length? otReqs.map(r=>reqCardHTML(r,false,false,null,state.me.canCancelApproved)).join('') : `<div class="empty">연장근무 신청 내역이 없어요.</div>`}
       </div>
     </div>
   `;
-  if(state.me.isAdmin){
+  if(state.me.canCancelApproved){
     document.querySelectorAll('[data-admin-cancel]').forEach(btn=>{
       btn.onclick = async ()=>{
         const r = state.data.requests.find(x=>x.id===btn.dataset.adminCancel);
@@ -2016,6 +2026,7 @@ function renderMembers(main){
         <button class="toggle-btn ${e.isApprover?'on':''}" data-toggle-approver="${e.id}">승인자</button>
         <button class="toggle-btn ${e.isHrApprover?'on':''}" data-toggle-hr="${e.id}" style="margin-top:4px;">연장근무 최종승인</button>
         <button class="toggle-btn ${e.isFullViewer?'on':''}" data-toggle-fullview="${e.id}" style="margin-top:4px;">연차/연장근무 전체열람</button>
+        <button class="toggle-btn ${e.canCancelApproved?'on':''}" data-toggle-cancel="${e.id}" style="margin-top:4px;">승인취소 권한</button>
         <button class="toggle-btn ${e.isAdmin?'on':''}" data-toggle-admin="${e.id}" style="margin-top:4px;">시스템 관리자</button>
       </td>
       <td><input type="text" inputmode="decimal" class="balance-input" data-balance="${e.id}" value="${e.annualTotal}"></td>
@@ -2051,6 +2062,15 @@ function renderMembers(main){
       e.isFullViewer = !e.isFullViewer;
       await saveData();
       showToast(e.isFullViewer? `${e.name}님에게 연차/연장근무 전체열람 권한을 부여했어요.` : `${e.name}님의 전체열람 권한을 해제했어요.`);
+      renderMembers(main);
+    };
+  });
+  document.querySelectorAll('[data-toggle-cancel]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const e = empById(btn.dataset.toggleCancel);
+      e.canCancelApproved = !e.canCancelApproved;
+      await saveData();
+      showToast(e.canCancelApproved? `${e.name}님에게 승인취소 권한을 부여했어요.` : `${e.name}님의 승인취소 권한을 해제했어요.`);
       renderMembers(main);
     };
   });
