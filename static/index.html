@@ -929,6 +929,11 @@ function visibleEmployeesForStatus(viewer){
   if(isLeaderPosition(viewer)) return state.data.employees.filter(e=>e.team===viewer.team);
   return state.data.employees.filter(e=>e.id===viewer.id);
 }
+function sortSelfFirstThenAlpha(employees, meId){
+  const mine = employees.filter(e=>e.id===meId);
+  const others = employees.filter(e=>e.id!==meId).slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  return [...mine, ...others];
+}
 function annualUsed(empId){
   const emp = empById(empId);
   const base = emp && emp.baseUsed ? emp.baseUsed : 0;
@@ -952,7 +957,7 @@ function renderLogin(){
 
       <div class="field">
         <label>사번</label>
-        <input type="text" id="login-empno" placeholder="예: 05" inputmode="numeric" maxlength="2">
+        <input type="text" id="login-empno" placeholder="예: 00" inputmode="numeric" maxlength="2">
       </div>
       <div class="field">
         <label>비밀번호</label>
@@ -983,6 +988,14 @@ function renderLogin(){
 
 /* ---------------- RENDER: APP SHELL ---------------- */
 function navItems(){
+  const isOwnerOnly = String(state.me.empNo).padStart(2,'0')==='09';
+  if(isOwnerOnly){
+    return [
+      {id:'dashboard', icon:'◆', label:'대시보드'},
+      {id:'account', icon:'🔑', label:'계정설정'},
+      {id:'members', icon:'☺', label:'구성원 관리'},
+    ];
+  }
   const items = [
     {id:'dashboard', icon:'◆', label:'대시보드'},
     {id:'request', icon:'✎', label:'신청하기'},
@@ -1047,6 +1060,7 @@ function renderApp(){
 
 function renderMain(){
   const main = document.getElementById('main');
+  main.style.maxWidth = (state.view==='calendar') ? '75%' : '';
   if(state.view==='dashboard') return renderDashboard(main);
   if(state.view==='request') return renderRequestForm(main);
   if(state.view==='my-requests') return renderMyRequests(main);
@@ -1488,7 +1502,10 @@ function renderMyRequests(main){
 
 /* ---------------- LEAVE STATUS ---------------- */
 function renderLeaveStatus(main){
-  const visible = visibleEmployeesForStatus(state.me).slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  const visible = sortSelfFirstThenAlpha(
+    visibleEmployeesForStatus(state.me).filter(e=>String(e.empNo).padStart(2,'0')!=='09'),
+    state.me.id
+  );
   const visibleIds = new Set(visible.map(e=>e.id));
   const approvedReqs = state.data.requests
     .filter(r=> r.status==='approved' && r.type!=='overtime' && visibleIds.has(r.employeeId))
@@ -1576,7 +1593,10 @@ function renderLeaveStatus(main){
 
 /* ---------------- OVERTIME STATUS ---------------- */
 function renderOvertimeStatus(main){
-  const visible = visibleEmployeesForStatus(state.me);
+  const visible = sortSelfFirstThenAlpha(
+    visibleEmployeesForStatus(state.me).filter(e=>String(e.empNo).padStart(2,'0')!=='09'),
+    state.me.id
+  );
   const visibleIds = new Set(visible.map(e=>e.id));
   const otReqs = state.data.requests
     .filter(r=>r.type==='overtime' && visibleIds.has(r.employeeId))
@@ -1902,7 +1922,7 @@ function renderMembers(main){
     </div>
     ${state.me.canUploadRoster ? `
     <div class="card" style="margin-bottom:20px;">
-      <div class="section-title">엑셀로 조직도 일괄 업로드 <span style="font-size:11.5px; color:var(--muted); font-weight:600;">이동원·이동현·정나은·김남홍만 사용 가능</span></div>
+      <div class="section-title">엑셀로 조직도 일괄 업로드</div>
       <p class="hint" style="margin-bottom:14px;">
         엑셀 열 구성: <strong>사번, 이름, 부서, 직책, 총연차</strong> (첫 행은 제목행). 사번이 이미 있는 사람은 정보가 갱신되고,
         없는 사번은 새로 추가돼요. <strong>목록에 없다고 기존 구성원이 삭제되진 않아요.</strong>
@@ -1918,7 +1938,7 @@ function renderMembers(main){
       <div class="field row-2">
         <div>
           <label style="display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px;">사번</label>
-          <input type="text" id="new-member-empno" placeholder="예: 05" inputmode="numeric" maxlength="2">
+          <input type="text" id="new-member-empno" placeholder="예: 00" inputmode="numeric" maxlength="2">
         </div>
         <div>
           <label style="display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:6px;">이름</label>
@@ -1974,7 +1994,7 @@ function renderMembers(main){
   `;
   const body = document.getElementById('members-body');
   if(body){
-  const sortedEmployees = state.data.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  const sortedEmployees = sortSelfFirstThenAlpha(state.data.employees, state.me.id);
   body.innerHTML = sortedEmployees.map(e=>{
     const used = annualUsed(e.id);
     const remain = (e.annualTotal - used).toFixed(1).replace(/\.0$/,'');
