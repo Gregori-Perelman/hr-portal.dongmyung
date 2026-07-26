@@ -446,11 +446,11 @@ const SEED_EMPLOYEES = [
   { empNo:'21', name:'허재관',    team:'본사',       position:'부사장', annualTotal:22 },
   { empNo:'41', name:'심대흥',    team:'본사영업부',  position:'팀원',  annualTotal:16 },
   { empNo:'33', name:'신상무',    team:'서울지점',    position:'지점장', annualTotal:19 },
-  { empNo:'10', name:'정나은',    team:'영업지원팀',  position:'팀장',  annualTotal:25, isHrApprover:true, isAdmin:true, canUploadRoster:true, canCancelApproved:true },
+  { empNo:'10', name:'정나은',    team:'영업지원팀',  position:'팀장',  annualTotal:25, isHrApprover:true, isAdmin:true, canUploadRoster:true, canCancelApproved:true, canViewDetailLog:true },
   { empNo:'54', name:'구현',      team:'물류팀',      position:'팀장',  annualTotal:18 },
-  { empNo:'05',  name:'김남홍',    team:'영업지원팀',  position:'팀원',  annualTotal:25, isFullViewer:true, canUploadRoster:true },
+  { empNo:'05',  name:'김남홍',    team:'영업지원팀',  position:'팀원',  annualTotal:25, isFullViewer:true, canUploadRoster:true, canViewDetailLog:true },
   { empNo:'13', name:'김성준YB',  team:'본사영업부',  position:'팀장',  annualTotal:24 },
-  { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true, canUploadRoster:true, canCancelApproved:true },
+  { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true, canUploadRoster:true, canCancelApproved:true, canViewDetailLog:true },
   { empNo:'26', name:'정태건',    team:'FA시스템팀',  position:'팀장',  annualTotal:18 },
   { empNo:'16', name:'강현동',    team:'물류팀',      position:'팀원',  annualTotal:23 },
   { empNo:'23', name:'여승현',    team:'물류팀',      position:'팀원',  annualTotal:21 },
@@ -747,6 +747,7 @@ function buildSeedEmployees(){
     isFullViewer: !!s.isFullViewer,
     canUploadRoster: !!s.canUploadRoster,
     canCancelApproved: !!s.canCancelApproved,
+    canViewDetailLog: !!s.canViewDetailLog,
     annualTotal: s.annualTotal, baseUsed: 0,
   }));
 }
@@ -857,6 +858,15 @@ async function loadData(){
       state.data.restrictedCancelApprovedV1 = true;
       await saveData();
     }
+    if(!state.data.grantedDetailLogV1){
+      // 이동현, 정나은, 김남홍에게 연차현황 상세 열람 권한 부여
+      const targets = ['40','10','05'];
+      state.data.employees.forEach(e=>{
+        if(targets.includes(String(e.empNo).padStart(2,'0'))){ e.canViewDetailLog = true; }
+      });
+      state.data.grantedDetailLogV1 = true;
+      await saveData();
+    }
   }catch(e){
     const freshEmployees = buildSeedEmployees();
     const freshRequests = [];
@@ -873,7 +883,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch2: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch2: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true };
     await saveData();
   }
 }
@@ -1011,8 +1021,9 @@ function navItems(){
     {id:'request', icon:'✎', label:'신청하기'},
     {id:'my-requests', icon:'☰', label:'내 신청내역'},
     {id:'leave-status', icon:'📊', label:'연차현황'},
-    {id:'overtime-status', icon:'🕐', label:'연장근무 현황'},
   ];
+  if(state.me.canViewDetailLog) items.push({id:'leave-status-detail', icon:'🔍', label:'연차현황 상세'});
+  items.push({id:'overtime-status', icon:'🕐', label:'연장근무 현황'});
   if(state.me.isApprover) items.push({id:'approvals', icon:'✓', label:'승인함', badge: myPendingCount()});
   items.push({id:'calendar', icon:'▦', label:'회사 캘린더'});
   items.push({id:'account', icon:'🔑', label:'계정설정'});
@@ -1075,6 +1086,7 @@ function renderMain(){
   if(state.view==='request') return renderRequestForm(main);
   if(state.view==='my-requests') return renderMyRequests(main);
   if(state.view==='leave-status') return renderLeaveStatus(main);
+  if(state.view==='leave-status-detail') return renderLeaveStatusDetail(main);
   if(state.view==='overtime-status') return renderOvertimeStatus(main);
   if(state.view==='approvals') return renderApprovals(main);
   if(state.view==='calendar') return renderCalendar(main);
@@ -1599,6 +1611,109 @@ function renderLeaveStatus(main){
       XLSX.writeFile(wb, `연차현황_${todayStr()}.xlsx`);
     };
   }
+}
+
+/* ---------------- LEAVE STATUS DETAIL ---------------- */
+function requestDetailText(r){
+  if(r.type==='half'){
+    if(r.halfType==='split') return `${String(r.splitStart).padStart(2,'0')}:00~${String(r.splitEnd).padStart(2,'0')}:00 분할반차`;
+    return r.halfType==='am' ? '오전반차' : '오후반차';
+  }
+  if(r.type==='family') return FAMILY_SUBTYPES[r.familySub] ? FAMILY_SUBTYPES[r.familySub].label : '';
+  if(r.type==='overtime') return `${r.otStart||''}~${r.otEnd||''}`;
+  return '';
+}
+function requestStatusText(r){
+  if(r.status==='approved') return '승인';
+  if(r.status==='rejected') return '반려';
+  if(r.status==='cancelled') return '취소됨';
+  if(r.status==='pending_hr') return '1차승인';
+  return '대기중';
+}
+function renderLeaveStatusDetail(main){
+  const visible = sortSelfFirstThenAlpha(
+    visibleEmployeesForStatus(state.me).filter(e=>String(e.empNo).padStart(2,'0')!=='09'),
+    state.me.id
+  );
+  main.innerHTML = `
+    <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <div>
+        <div class="page-eyebrow">Leave Status Detail</div>
+        <h1 class="page-title">연차현황 상세</h1>
+        <p class="page-desc">개인별로 연차·반차·예비군훈련·병가·경조휴가·출장·기타를 언제 썼는지 날짜별로 확인할 수 있어요. (연장근무는 별도 페이지에서 확인)</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="export-detail-excel" style="width:auto; white-space:nowrap;">⬇ 엑셀 다운로드</button>
+    </div>
+    <div class="field" style="max-width:320px; margin-bottom:16px;">
+      <input type="text" id="detail-name-filter" placeholder="이름으로 검색">
+    </div>
+    <div id="detail-list"></div>
+  `;
+
+  function buildList(filterText){
+    const list = document.getElementById('detail-list');
+    const filtered = filterText ? visible.filter(e=>e.name.includes(filterText)) : visible;
+    if(filtered.length===0){ list.innerHTML = `<div class="empty">검색 결과가 없어요.</div>`; return; }
+    list.innerHTML = filtered.map(e=>{
+      const reqs = state.data.requests.filter(r=>r.employeeId===e.id && r.type!=='overtime').sort((a,b)=>b.startDate.localeCompare(a.startDate));
+      const approved = reqs.filter(r=>r.status==='approved');
+      const usedDays = approved.filter(r=>LEAVE_TYPES[r.type].deduct).reduce((s,r)=>s+r.days,0);
+      const typeCounts = {};
+      approved.forEach(r=>{ typeCounts[r.type] = (typeCounts[r.type]||0)+1; });
+      const summaryBits = Object.entries(typeCounts).map(([k,v])=>`${LEAVE_TYPES[k].label} ${v}건`).join(' · ');
+      return `
+      <details class="card" style="margin-bottom:10px; padding:16px 20px;">
+        <summary style="cursor:pointer; font-weight:800; font-size:14.5px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+          <span>${e.name} <span style="font-weight:600; color:var(--muted); font-size:12.5px;">${e.team||''} · ${e.position||''}</span></span>
+          <span style="font-weight:600; font-size:12.5px; color:var(--brand); font-family:var(--mono);">
+            연차/반차 사용 ${trimNum(usedDays)}일 ${summaryBits? ' · '+summaryBits : ''} · 총 ${reqs.length}건
+          </span>
+        </summary>
+        <table class="members" style="margin-top:14px;">
+          <thead><tr><th>날짜</th><th>유형</th><th>세부</th><th>일수</th><th>상태</th></tr></thead>
+          <tbody>
+            ${reqs.map(r=>{
+              const t = LEAVE_TYPES[r.type];
+              const dateRange = r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`;
+              return `<tr>
+                <td style="font-family:var(--mono);">${dateRange}${r.isBackdated?' <span style="color:var(--stamp-red); font-size:10.5px;">(사후)</span>':''}</td>
+                <td><span style="background:${t.soft}; color:${t.color}; padding:2px 8px; border-radius:10px; font-size:11.5px; font-weight:700;">${t.label}</span></td>
+                <td style="font-size:12.5px; color:var(--ink-soft);">${requestDetailText(r)}</td>
+                <td style="font-family:var(--mono);">${t.deduct? trimNum(r.days)+'일' : '-'}</td>
+                <td style="font-size:12.5px; font-weight:700;">${requestStatusText(r)}</td>
+              </tr>`;
+            }).join('') || `<tr><td colspan="5" style="text-align:center; color:var(--muted);">기록이 없어요</td></tr>`}
+          </tbody>
+        </table>
+      </details>`;
+    }).join('');
+  }
+  buildList('');
+
+  document.getElementById('detail-name-filter').oninput = (e)=> buildList(e.target.value.trim());
+
+  document.getElementById('export-detail-excel').onclick = ()=>{
+    if(typeof XLSX==='undefined'){ showToast('엑셀 라이브러리를 불러오지 못했어요. 인터넷 연결이 필요해요.'); return; }
+    const rows = [];
+    visible.forEach(e=>{
+      const reqs = state.data.requests.filter(r=>r.employeeId===e.id && r.type!=='overtime').sort((a,b)=>a.startDate.localeCompare(b.startDate));
+      reqs.forEach(r=>{
+        const t = LEAVE_TYPES[r.type];
+        rows.push({
+          '이름': e.name, '팀': e.team||'', '직책': e.position||'',
+          '시작일': r.startDate, '종료일': r.endDate,
+          '유형': t.label, '세부': requestDetailText(r),
+          '일수': t.deduct? r.days : '',
+          '상태': requestStatusText(r),
+          '사후신청': r.isBackdated? 'Y' : ''
+        });
+      });
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '연차현황상세');
+    XLSX.writeFile(wb, `연차현황상세_${todayStr()}.xlsx`);
+  };
 }
 
 /* ---------------- OVERTIME STATUS ---------------- */
