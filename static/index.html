@@ -947,6 +947,17 @@ function canApprove(r){
   if(leader) return state.me.id === leader.id;
   return isFinalOvertimeApprover(state.me); // 팀장이 없는 경우의 안전장치
 }
+function isApprovalRelevant(r, viewer){
+  // 승인함에 표시할지 여부: 본인이 처리할 수 있거나(현재/과거), 본인이 실제로 처리한 이력이 있는 요청만 노출
+  const owner = empById(r.employeeId);
+  if(!owner) return false;
+  if(r.type==='overtime'){
+    const leader = findTeamLeader(owner.team);
+    return (leader && leader.id===viewer.id) || isFinalOvertimeApprover(viewer) || r.teamApproverId===viewer.id || r.hrApproverId===viewer.id;
+  }
+  const leader = findTeamLeader(owner.team);
+  return (leader && leader.id===viewer.id) || r.approverId===viewer.id;
+}
 function myPendingCount(){
   if(!state.me || !state.me.isApprover) return 0;
   return state.data.requests.filter(r=>(r.status==='pending'||r.status==='pending_hr') && canApprove(r)).length;
@@ -1109,7 +1120,7 @@ function renderDashboard(main){
   const remainHours = daysToHours(state.me.annualTotal - used);
   const usedHours = daysToHours(used);
   const myReqs = state.data.requests.filter(r=>r.employeeId===state.me.id).sort((a,b)=>b.createdAt-a.createdAt).slice(0,3);
-  const pendingAll = state.data.requests.filter(r=>r.status==='pending'||r.status==='pending_hr');
+  const pendingAll = state.data.requests.filter(r=>(r.status==='pending'||r.status==='pending_hr') && isApprovalRelevant(r, state.me));
 
   main.innerHTML = `
     <div class="page-head">
@@ -1813,8 +1824,8 @@ function renderOvertimeStatus(main){
 
 /* ---------------- APPROVALS ---------------- */
 function renderApprovals(main){
-  const pending = state.data.requests.filter(r=>r.status==='pending'||r.status==='pending_hr').sort((a,b)=>a.createdAt-b.createdAt);
-  const decided = state.data.requests.filter(r=>r.status!=='pending' && r.status!=='pending_hr').sort((a,b)=>b.createdAt-a.createdAt).slice(0,8);
+  const pending = state.data.requests.filter(r=>(r.status==='pending'||r.status==='pending_hr') && isApprovalRelevant(r, state.me)).sort((a,b)=>a.createdAt-b.createdAt);
+  const decided = state.data.requests.filter(r=>r.status!=='pending' && r.status!=='pending_hr' && isApprovalRelevant(r, state.me)).sort((a,b)=>b.createdAt-a.createdAt).slice(0,8);
   main.innerHTML = `
     <div class="page-head">
       <div class="page-eyebrow">Approvals</div>
