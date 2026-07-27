@@ -705,6 +705,14 @@ function isWeekend(d){ const day=d.getDay(); return day===0||day===6; }
 function isHoliday(dateStr){
   return !!(state.data.holidays && state.data.holidays.some(h=>h.date===dateStr));
 }
+function requestAppliesToDate(r, dateStr){
+  // 연차는 주말/공휴일엔 차감되지 않으므로, 그 날짜에는 캘린더에 표시하지 않음
+  if(r.type==='annual'){
+    const d = parseDate(dateStr);
+    if(isWeekend(d) || isHoliday(dateStr)) return false;
+  }
+  return true;
+}
 function countBusinessDays(startStr, endStr){
   let start=parseDate(startStr), end=parseDate(endStr);
   if(end<start) return 0;
@@ -1159,7 +1167,7 @@ function renderMiniCalendar(container){
   for(let i=0;i<startOffset;i++) html += `<div></div>`;
   for(let d=1; d<=daysInMonth; d++){
     const dateStr = fmtDate(new Date(year,month,d));
-    const dayReqs = state.data.requests.filter(r=> r.status!=='rejected' && r.status!=='cancelled' && r.type!=='overtime' && dateStr>=r.startDate && dateStr<=r.endDate);
+    const dayReqs = state.data.requests.filter(r=> r.status!=='rejected' && r.status!=='cancelled' && r.type!=='overtime' && dateStr>=r.startDate && dateStr<=r.endDate && requestAppliesToDate(r, dateStr));
     const isToday = d===now.getDate();
     html += `<div style="aspect-ratio:1; border-radius:6px; display:flex; align-items:center; justify-content:center;
       font-family:var(--mono); font-size:10.5px; position:relative;
@@ -1943,7 +1951,7 @@ function buildCalGrid(){
     if(dow===0) numColor = 'var(--stamp-red)';
     if(dow===6) numColor = 'var(--sat-blue)';
     if(holiday) numColor = 'var(--stamp-red)';
-    const dayReqs = state.data.requests.filter(r=> r.status!=='rejected' && r.status!=='cancelled' && r.type!=='overtime' && dateStr>=r.startDate && dateStr<=r.endDate);
+    const dayReqs = state.data.requests.filter(r=> r.status!=='rejected' && r.status!=='cancelled' && r.type!=='overtime' && dateStr>=r.startDate && dateStr<=r.endDate && requestAppliesToDate(r, dateStr));
     html += `<div class="cal-cell ${otherMonth?'other-month':''} ${isToday?'today':''}" data-date="${dateStr}" style="cursor:pointer;">
       <div class="cal-daynum" style="color:${numColor}; font-weight:${holiday?'800':'600'};">${dateObj.getDate()}${holiday? ` <span style="font-size:9px; font-weight:700;">${state.data.holidays.find(h=>h.date===dateStr).label}</span>`:''}</div>
       ${dayReqs.slice(0,3).map(r=>{
@@ -1967,7 +1975,7 @@ function buildCalGrid(){
 function showDayDetailModal(dateStr){
   const old = document.getElementById('day-detail-modal');
   if(old) old.remove();
-  const dayReqs = state.data.requests.filter(r=> r.status!=='rejected' && r.status!=='cancelled' && r.type!=='overtime' && dateStr>=r.startDate && dateStr<=r.endDate);
+  const dayReqs = state.data.requests.filter(r=> r.status!=='rejected' && r.status!=='cancelled' && r.type!=='overtime' && dateStr>=r.startDate && dateStr<=r.endDate && requestAppliesToDate(r, dateStr));
   const holiday = isHoliday(dateStr);
   const holidayLabel = holiday? state.data.holidays.find(h=>h.date===dateStr).label : null;
   const d = parseDate(dateStr);
