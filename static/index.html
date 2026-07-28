@@ -442,7 +442,7 @@ const DEFAULT_PASSWORD = 'dmbrg';
 const ORG_VERSION = 3; // 조직도가 바뀌면 이 값을 올려서 자동 재시딩
 
 const SEED_EMPLOYEES = [
-  { empNo:'09', name:'이동원',    team:'본사',       position:'대표이사', annualTotal:0, isAdmin:true, canUploadRoster:true },
+  { empNo:'09', name:'이동원',    team:'본사',       position:'대표이사', annualTotal:0, isAdmin:true, canUploadRoster:true, canViewDetailLog:true },
   { empNo:'21', name:'허재관',    team:'본사',       position:'부사장', annualTotal:22 },
   { empNo:'41', name:'심대흥',    team:'본사영업부',  position:'팀원',  annualTotal:16 },
   { empNo:'33', name:'신상무',    team:'서울지점',    position:'지점장', annualTotal:19 },
@@ -875,6 +875,13 @@ async function loadData(){
       state.data.grantedDetailLogV1 = true;
       await saveData();
     }
+    if(!state.data.grantedOwnerViewV1){
+      // 이동원(대표이사, 사번09)에게 관리자급 열람 권한 부여 (기안/승인은 여전히 제외)
+      const owner = state.data.employees.find(e=>String(e.empNo).padStart(2,'0')==='09');
+      if(owner){ owner.canViewDetailLog = true; }
+      state.data.grantedOwnerViewV1 = true;
+      await saveData();
+    }
   }catch(e){
     const freshEmployees = buildSeedEmployees();
     const freshRequests = [];
@@ -891,7 +898,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch2: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch2: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true };
     await saveData();
   }
 }
@@ -1029,11 +1036,16 @@ function renderLogin(){
 function navItems(){
   const isOwnerOnly = String(state.me.empNo).padStart(2,'0')==='09';
   if(isOwnerOnly){
-    return [
+    const ownerItems = [
       {id:'dashboard', icon:'◆', label:'대시보드'},
-      {id:'account', icon:'🔑', label:'계정설정'},
-      {id:'members', icon:'☺', label:'구성원 관리'},
+      {id:'leave-status', icon:'📊', label:'연차현황'},
     ];
+    if(state.me.canViewDetailLog) ownerItems.push({id:'leave-status-detail', icon:'🔍', label:'연차현황 상세'});
+    ownerItems.push({id:'overtime-status', icon:'🕐', label:'연장근무 현황'});
+    ownerItems.push({id:'calendar', icon:'▦', label:'회사 캘린더'});
+    ownerItems.push({id:'account', icon:'🔑', label:'계정설정'});
+    ownerItems.push({id:'members', icon:'☺', label:'구성원 관리'});
+    return ownerItems;
   }
   const items = [
     {id:'dashboard', icon:'◆', label:'대시보드'},
