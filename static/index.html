@@ -390,7 +390,7 @@ const PERSONAL_KEY = 'my-identity-v1';
 const LEAVE_TYPES = {
   annual:   { label:'연차',      icon:'🏖️', deduct:true,  color:'#3F5BC9', soft:'#3F5BC918', range:true  },
   half:     { label:'반차',      icon:'🌗', deduct:true,  color:'#C85480', soft:'#C8548018', range:false },
-  reserve:  { label:'예비군훈련', icon:'🪖', deduct:false, color:'#2E7D5B', soft:'#2E7D5B18', range:true  },
+  reserve:  { label:'훈련',      icon:'🪖', deduct:false, color:'#2E7D5B', soft:'#2E7D5B18', range:true  },
   sick:     { label:'병가',      icon:'🩹', deduct:false, color:'#B23B30', soft:'#B23B3018', range:true  },
   family:   { label:'경조휴가',  icon:'🎗️', deduct:false, color:'#C4901F', soft:'#C4901F18', range:false },
   overtime: { label:'연장근무',  icon:'⏰', deduct:false, color:'#5C4A8A', soft:'#5C4A8A18', range:false },
@@ -402,6 +402,16 @@ const FAMILY_SUBTYPES = {
   marriage:            { label:'본인결혼',         days:5 },
   grandparent:         { label:'조부모상(친/외)',   days:3 },
   spouse_grandparent:  { label:'처가조부모상',      days:3 },
+};
+const DEFENSE_SUBTYPES = {
+  reserve: { label:'예비군' },
+  civil:   { label:'민방위' },
+};
+const ETC_SUBTYPES = {
+  edu:     { label:'교육' },
+  event:   { label:'행사' },
+  meeting: { label:'회의' },
+  other:   { label:'기타' },
 };
 // 날짜가 겹치면 안 되는(하루를 실제로 차지하는) 유형들
 const BLOCKING_TYPES = ['annual', 'half', 'family', 'busytrip'];
@@ -656,6 +666,8 @@ let state = {
   otStart: '18:00',
   otEnd: '20:00',
   formFamilySub: 'parent',
+  formDefenseSub: 'reserve',
+  formEtcSub: 'edu',
 };
 
 function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -999,7 +1011,7 @@ function renderLogin(){
     <div class="login-card">
       <div class="login-eyebrow">Team Attendance</div>
       <h1 class="login-title">HR Portal</h1>
-      <p class="login-sub">연차 · 반차 · 예비군훈련 등 팀 근태를 한곳에서 신청하고 결재하세요.</p>
+      <p class="login-sub">연차 · 반차 · 훈련(예비군/민방위) 등 팀 근태를 한곳에서 신청하고 결재하세요.</p>
 
       <div class="field">
         <label>사번</label>
@@ -1215,6 +1227,10 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel)
     ? `${r.startDate} · ${r.otStart}~${r.otEnd} (${formatMinutes(r.otMinutes)})`
     : r.type==='family'
     ? `${r.startDate} ~ ${r.endDate} · ${FAMILY_SUBTYPES[r.familySub]? FAMILY_SUBTYPES[r.familySub].label : ''} (${r.days}일, 일요일 제외)`
+    : r.type==='reserve'
+    ? `${(r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`)} · ${DEFENSE_SUBTYPES[r.subType]? DEFENSE_SUBTYPES[r.subType].label : ''}`
+    : r.type==='etc'
+    ? `${(r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`)} · ${ETC_SUBTYPES[r.subType]? ETC_SUBTYPES[r.subType].label : ''}`
     : (r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`);
   const stampClass = r.noApprovalNeeded? 'info' : (r.status==='approved'?'':((r.status==='rejected'||r.status==='cancelled')?'rejected':'pending'));
   const stampLabel = r.noApprovalNeeded? '등록완료' : (r.status==='approved'?'승인':(r.status==='rejected'?'반려':(r.status==='cancelled'?'취소됨':(r.status==='pending_hr'?'1차승인':'대기중'))));
@@ -1284,7 +1300,7 @@ function renderRequestForm(main){
   document.getElementById('submit-req').onclick = async ()=>{
     const type = state.formType;
     const t = LEAVE_TYPES[type];
-    let startDate, endDate, halfType=null, splitStart=null, splitEnd=null, otStart=null, otEnd=null, otMinutes=null, familySub=null, days=0;
+    let startDate, endDate, halfType=null, splitStart=null, splitEnd=null, otStart=null, otEnd=null, otMinutes=null, familySub=null, subType=null, days=0;
     if(type==='half'){
       startDate = endDate = document.getElementById('single-date').value;
       halfType = state.formHalf;
@@ -1313,6 +1329,16 @@ function renderRequestForm(main){
       const requiredDays = FAMILY_SUBTYPES[familySub].days;
       endDate = computeFamilyEndDate(startDate, requiredDays);
       days = requiredDays;
+    }else if(type==='reserve'){
+      subType = state.formDefenseSub;
+      startDate = document.getElementById('start-date').value;
+      endDate = document.getElementById('end-date').value || startDate;
+      days = countBusinessDays(startDate, endDate);
+    }else if(type==='etc'){
+      subType = state.formEtcSub;
+      startDate = document.getElementById('start-date').value;
+      endDate = document.getElementById('end-date').value || startDate;
+      days = countBusinessDays(startDate, endDate);
     }else{
       startDate = document.getElementById('start-date').value;
       endDate = document.getElementById('end-date').value || startDate;
@@ -1346,7 +1372,7 @@ function renderRequestForm(main){
 
     const newReq = {
       id: uid('req'), employeeId: state.me.id, type, startDate, endDate,
-      halfType, splitStart, splitEnd, otStart, otEnd, otMinutes, familySub,
+      halfType, splitStart, splitEnd, otStart, otEnd, otMinutes, familySub, subType,
       days, reason, status:'pending', rejectReason:'', createdAt: Date.now(),
       isBackdated: parseDate(startDate) < parseDate(todayStr())
     };
@@ -1513,6 +1539,56 @@ function renderDateFields(){
     };
     familyStartInp.onchange = updateFamilyHint;
     updateFamilyHint();
+  }else if(type==='reserve'){
+    box.innerHTML = `
+      <div class="field">
+        <label>구분</label>
+        <div class="type-grid" style="grid-template-columns:repeat(2,1fr);" id="defense-sub-grid">
+          ${Object.entries(DEFENSE_SUBTYPES).map(([key,f])=>`
+            <div class="type-opt ${state.formDefenseSub===key?'selected':''}" data-defensesub="${key}">${f.label}</div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="field row-2">
+        <div>
+          <label>시작일</label>
+          <input type="date" id="start-date" min="${minAllowedDateStr()}" value="${todayStr()}">
+        </div>
+        <div>
+          <label>종료일</label>
+          <input type="date" id="end-date" min="${minAllowedDateStr()}" value="${todayStr()}">
+        </div>
+      </div>
+      <div class="hint">이 유형은 연차에서 차감되지 않아요. 오늘 기준 최대 10일 전까지 사후 신청 가능해요.</div>
+    `;
+    document.querySelectorAll('[data-defensesub]').forEach(el=>{
+      el.onclick = ()=>{ state.formDefenseSub = el.dataset.defensesub; renderDateFields(); };
+    });
+  }else if(type==='etc'){
+    box.innerHTML = `
+      <div class="field">
+        <label>구분</label>
+        <div class="type-grid" style="grid-template-columns:repeat(2,1fr);" id="etc-sub-grid">
+          ${Object.entries(ETC_SUBTYPES).map(([key,f])=>`
+            <div class="type-opt ${state.formEtcSub===key?'selected':''}" data-etcsub="${key}">${f.label}</div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="field row-2">
+        <div>
+          <label>시작일</label>
+          <input type="date" id="start-date" min="${minAllowedDateStr()}" value="${todayStr()}">
+        </div>
+        <div>
+          <label>종료일</label>
+          <input type="date" id="end-date" min="${minAllowedDateStr()}" value="${todayStr()}">
+        </div>
+      </div>
+      <div class="hint">이 유형은 연차에서 차감되지 않아요. 오늘 기준 최대 10일 전까지 사후 신청 가능해요.</div>
+    `;
+    document.querySelectorAll('[data-etcsub]').forEach(el=>{
+      el.onclick = ()=>{ state.formEtcSub = el.dataset.etcsub; renderDateFields(); };
+    });
   }else{
     box.innerHTML = `
       <div class="field row-2">
@@ -1651,6 +1727,8 @@ function requestDetailText(r){
     return r.halfType==='am' ? '오전반차' : '오후반차';
   }
   if(r.type==='family') return FAMILY_SUBTYPES[r.familySub] ? FAMILY_SUBTYPES[r.familySub].label : '';
+  if(r.type==='reserve') return DEFENSE_SUBTYPES[r.subType] ? DEFENSE_SUBTYPES[r.subType].label : '';
+  if(r.type==='etc') return ETC_SUBTYPES[r.subType] ? ETC_SUBTYPES[r.subType].label : '';
   if(r.type==='overtime') return `${r.otStart||''}~${r.otEnd||''}`;
   return '';
 }
@@ -1671,7 +1749,7 @@ function renderLeaveStatusDetail(main){
       <div>
         <div class="page-eyebrow">Leave Status Detail</div>
         <h1 class="page-title">연차현황 상세</h1>
-        <p class="page-desc">개인별로 연차·반차·예비군훈련·병가·경조휴가·출장·기타를 언제 썼는지 날짜별로 확인할 수 있어요. (연장근무는 별도 페이지에서 확인)</p>
+        <p class="page-desc">개인별로 연차·반차·훈련(예비군/민방위)·병가·경조휴가·출장·기타(교육/행사/회의 등)를 언제 썼는지 날짜별로 확인할 수 있어요. (연장근무는 별도 페이지에서 확인)</p>
       </div>
       <button class="btn btn-ghost btn-sm" id="export-detail-excel" style="width:auto; white-space:nowrap;">⬇ 엑셀 다운로드</button>
     </div>
@@ -1983,6 +2061,10 @@ function buildCalGrid(){
         let typeLabel = t.label;
         if(r.type==='half'){
           typeLabel = r.halfType==='am' ? '오전반차' : (r.halfType==='pm' ? '오후반차' : '분할반차');
+        }else if(r.type==='reserve'){
+          typeLabel = DEFENSE_SUBTYPES[r.subType] ? DEFENSE_SUBTYPES[r.subType].label : t.label;
+        }else if(r.type==='etc'){
+          typeLabel = ETC_SUBTYPES[r.subType] ? ETC_SUBTYPES[r.subType].label : t.label;
         }
         return `<div class="cal-tag" style="background:${t.color}; color:#fff; opacity:${opacity};">${empName(r.employeeId)} · ${typeLabel}${r.isBackdated? ' (사후)':''}</div>`;
       }).join('')}
