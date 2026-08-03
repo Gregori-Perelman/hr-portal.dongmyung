@@ -679,6 +679,7 @@ let state = {
   formDefenseSub: 'reserve',
   formEtcSub: 'edu',
   formTargetEmployeeId: null,
+  approvalLogSort: 'time',
 };
 
 function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -1064,10 +1065,12 @@ function navItems(){
   if(isOwnerOnly){
     const ownerItems = [
       {id:'dashboard', icon:'◆', label:'대시보드'},
+      {id:'request', icon:'✎', label:'신청하기'},
       {id:'leave-status', icon:'📊', label:'연차현황'},
     ];
     if(state.me.canViewDetailLog) ownerItems.push({id:'leave-status-detail', icon:'🔍', label:'연차현황 상세'});
     ownerItems.push({id:'overtime-status', icon:'🕐', label:'연장근무 현황'});
+    if(state.me.isAdmin) ownerItems.push({id:'approval-log', icon:'📜', label:'결재내역'});
     ownerItems.push({id:'calendar', icon:'▦', label:'회사 캘린더'});
     ownerItems.push({id:'account', icon:'🔑', label:'계정설정'});
     ownerItems.push({id:'members', icon:'☺', label:'구성원 관리'});
@@ -1082,6 +1085,7 @@ function navItems(){
   if(state.me.canViewDetailLog) items.push({id:'leave-status-detail', icon:'🔍', label:'연차현황 상세'});
   items.push({id:'overtime-status', icon:'🕐', label:'연장근무 현황'});
   if(state.me.isApprover || state.me.canCancelApproved) items.push({id:'approvals', icon:'✓', label:'승인함', badge: myPendingCount()});
+  if(state.me.isAdmin) items.push({id:'approval-log', icon:'📜', label:'결재내역'});
   items.push({id:'calendar', icon:'▦', label:'회사 캘린더'});
   items.push({id:'account', icon:'🔑', label:'계정설정'});
   if(state.me.isAdmin || state.me.canUploadRoster) items.push({id:'members', icon:'☺', label:'구성원 관리'});
@@ -1145,6 +1149,7 @@ function renderMain(){
   if(state.view==='leave-status') return renderLeaveStatus(main);
   if(state.view==='leave-status-detail') return renderLeaveStatusDetail(main);
   if(state.view==='overtime-status') return renderOvertimeStatus(main);
+  if(state.view==='approval-log') return renderApprovalLog(main);
   if(state.view==='approvals') return renderApprovals(main);
   if(state.view==='calendar') return renderCalendar(main);
   if(state.view==='account') return renderAccountSettings(main);
@@ -1295,11 +1300,14 @@ function escapeHTML(s){ const d=document.createElement('div'); d.textContent=s; 
 
 /* ---------------- REQUEST FORM ---------------- */
 function renderRequestForm(main){
+  const isOwnerRestricted = String(state.me.empNo).padStart(2,'0')==='09';
+  const allowedTypes = isOwnerRestricted ? ['busytrip','etc'] : Object.keys(LEAVE_TYPES);
+  if(!allowedTypes.includes(state.formType)) state.formType = allowedTypes[0];
   main.innerHTML = `
     <div class="page-head">
       <div class="page-eyebrow">New Request</div>
       <h1 class="page-title">근태 신청</h1>
-      <p class="page-desc">유형을 선택하고 필요한 정보를 입력한 뒤 제출하세요. 제출 즉시 승인자에게 전달돼요.</p>
+      <p class="page-desc">${isOwnerRestricted? '출장 또는 기타만 등록할 수 있어요.' : '유형을 선택하고 필요한 정보를 입력한 뒤 제출하세요. 제출 즉시 승인자에게 전달돼요.'}</p>
     </div>
     <div class="card form-card">
       ${state.me.canCancelApproved ? `
@@ -1313,7 +1321,7 @@ function renderRequestForm(main){
       </div>
       `:''}
       <div class="type-grid" id="type-grid">
-        ${Object.entries(LEAVE_TYPES).map(([key,t])=>`
+        ${Object.entries(LEAVE_TYPES).filter(([key])=>allowedTypes.includes(key)).map(([key,t])=>`
           <div class="type-opt ${state.formType===key?'selected':''}" data-type="${key}">${t.icon}<br>${t.label}</div>
         `).join('')}
       </div>
@@ -1336,6 +1344,10 @@ function renderRequestForm(main){
 
   document.getElementById('submit-req').onclick = async ()=>{
     const type = state.formType;
+    if(String(state.me.empNo).padStart(2,'0')==='09' && !['busytrip','etc'].includes(type)){
+      showToast('출장 또는 기타만 신청할 수 있어요.');
+      return;
+    }
     const t = LEAVE_TYPES[type];
     const targetEmp = (state.me.canCancelApproved && state.formTargetEmployeeId) ? (empById(state.formTargetEmployeeId)||state.me) : state.me;
     let startDate, endDate, halfType=null, splitStart=null, splitEnd=null, otStart=null, otEnd=null, otMinutes=null, familySub=null, subType=null, days=0;
@@ -1952,6 +1964,109 @@ function renderOvertimeStatus(main){
   }
 }
 
+/* ---------------- APPROVAL LOG (시스템관리자 전용) ---------------- */
+function approverDisplayText(r){
+  if(r.status==='cancelled') return `${empName(r.cancelledBy)} (승인취소)`;
+  if(r.noApprovalNeeded) return '결재 불필요(자동등록)';
+  if(r.type==='overtime'){
+    if(r.status==='approved') return `${empName(r.teamApproverId)} → ${empName(r.hrApproverId)}`;
+    if(r.status==='rejected') return `${empName(r.approverId)} (반려)`;
+    return '-';
+  }
+  if(r.status==='approved') return `${empName(r.approverId)}${r.autoApproved? ' (자동승인)':''}`;
+  if(r.status==='rejected') return `${empName(r.approverId)} (반려)`;
+  return '-';
+}
+function decisionStatusText(r){
+  if(r.status==='approved') return '승인';
+  if(r.status==='rejected') return '반려';
+  if(r.status==='cancelled') return '취소됨';
+  return r.status;
+}
+function renderApprovalLog(main){
+  const decided = state.data.requests.filter(r=>r.status==='approved'||r.status==='rejected'||r.status==='cancelled');
+  main.innerHTML = `
+    <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <div>
+        <div class="page-eyebrow">Approval Log</div>
+        <h1 class="page-title">결재내역</h1>
+        <p class="page-desc">회사 전체의 결재 처리 이력이에요. 다른 팀장·부서장이 처리한 건도 모두 볼 수 있어요. (시스템 관리자 전용)</p>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-sm ${state.approvalLogSort==='time'?'btn-primary':'btn-ghost'}" id="sort-time" style="width:auto;">시계열순</button>
+        <button class="btn btn-sm ${state.approvalLogSort==='team'?'btn-primary':'btn-ghost'}" id="sort-team" style="width:auto;">팀별순</button>
+      </div>
+    </div>
+    <div id="approval-log-list"></div>
+  `;
+  document.getElementById('sort-time').onclick = ()=>{ state.approvalLogSort='time'; renderApprovalLog(main); };
+  document.getElementById('sort-team').onclick = ()=>{ state.approvalLogSort='team'; renderApprovalLog(main); };
+
+  const list = document.getElementById('approval-log-list');
+  const rowHTML = (r)=>{
+    const t = LEAVE_TYPES[r.type];
+    const owner = empById(r.employeeId);
+    const dateRange = r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`;
+    return `
+    <tr>
+      <td style="font-family:var(--mono); font-size:12px; color:var(--muted);">${new Date(r.createdAt).toISOString().slice(0,10)}</td>
+      <td><strong>${empName(r.employeeId)}</strong></td>
+      <td>${owner? owner.team||'' : ''}</td>
+      <td><span style="background:${t.soft}; color:${t.color}; padding:2px 8px; border-radius:10px; font-size:11.5px; font-weight:700;">${t.label}</span></td>
+      <td style="font-family:var(--mono); font-size:12px;">${dateRange}</td>
+      <td style="font-size:12.5px; font-weight:700;">${decisionStatusText(r)}</td>
+      <td style="font-size:12.5px; color:var(--ink-soft);">${approverDisplayText(r)}</td>
+    </tr>`;
+  };
+
+  if(decided.length===0){
+    list.innerHTML = `<div class="card"><div class="empty">아직 처리된 결재 내역이 없어요.</div></div>`;
+    return;
+  }
+
+  if(state.approvalLogSort==='time'){
+    const sorted = decided.slice().sort((a,b)=>b.createdAt-a.createdAt);
+    list.innerHTML = `
+      <div class="card">
+        <table class="members">
+          <thead><tr><th>날짜</th><th>이름</th><th>팀</th><th>유형</th><th>기간</th><th>결과</th><th>처리자</th></tr></thead>
+          <tbody>${sorted.map(rowHTML).join('')}</tbody>
+        </table>
+      </div>`;
+  }else{
+    const byTeam = {};
+    decided.forEach(r=>{
+      const owner = empById(r.employeeId);
+      const team = (owner && owner.team) || '미지정';
+      if(!byTeam[team]) byTeam[team] = [];
+      byTeam[team].push(r);
+    });
+    const teamNames = Object.keys(byTeam).sort((a,b)=>a.localeCompare(b,'ko'));
+    list.innerHTML = teamNames.map(team=>{
+      const reqs = byTeam[team].slice().sort((a,b)=>b.createdAt-a.createdAt);
+      return `
+      <div class="card" style="margin-bottom:14px;">
+        <div class="section-title">${team} <span style="font-size:11.5px; color:var(--muted); font-weight:600;">${reqs.length}건</span></div>
+        <table class="members">
+          <thead><tr><th>날짜</th><th>이름</th><th>유형</th><th>기간</th><th>결과</th><th>처리자</th></tr></thead>
+          <tbody>${reqs.map(r=>{
+            const t = LEAVE_TYPES[r.type];
+            const dateRange = r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`;
+            return `<tr>
+              <td style="font-family:var(--mono); font-size:12px; color:var(--muted);">${new Date(r.createdAt).toISOString().slice(0,10)}</td>
+              <td><strong>${empName(r.employeeId)}</strong></td>
+              <td><span style="background:${t.soft}; color:${t.color}; padding:2px 8px; border-radius:10px; font-size:11.5px; font-weight:700;">${t.label}</span></td>
+              <td style="font-family:var(--mono); font-size:12px;">${dateRange}</td>
+              <td style="font-size:12.5px; font-weight:700;">${decisionStatusText(r)}</td>
+              <td style="font-size:12.5px; color:var(--ink-soft);">${approverDisplayText(r)}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+    }).join('');
+  }
+}
+
 /* ---------------- APPROVALS ---------------- */
 function renderApprovals(main){
   const pending = state.data.requests.filter(r=>(r.status==='pending'||r.status==='pending_hr') && isApprovalRelevant(r, state.me)).sort((a,b)=>a.createdAt-b.createdAt);
@@ -2548,38 +2663,6 @@ async function init(){
   }
   renderLogin();
 }
-
-// ===== 자동 새로고침 (10초마다) =====
-// 로그인된 상태에서만, 입력 중일 수 있는 화면(신청하기/계정설정)이 아닐 때만 화면을 다시 그린다.
-// 서버에서 최신 데이터만 조용히 다시 받아오고, 폼 입력 중인 화면은 건드리지 않는다.
-let isPolling = false;
-async function pollRefresh(){
-  if(!state.me || isPolling) return;
-  isPolling = true;
-  try{
-    const res = await window.storage.get(SHARED_KEY, true);
-    const freshData = JSON.parse(res.value);
-    state.data = freshData;
-    const meId = state.me.id;
-    const updatedMe = state.data.employees.find(e=>e.id===meId);
-    if(updatedMe){
-      state.me = updatedMe;
-    }else{
-      // 본인 계정이 삭제된 경우: 로그아웃 처리
-      state.me = null;
-      renderLogin();
-      isPolling = false;
-      return;
-    }
-    if(state.view!=='request' && state.view!=='account'){
-      renderApp();
-    }
-  }catch(e){
-    // 폴링 중 오류는 조용히 무시(다음 주기에 다시 시도)
-  }
-  isPolling = false;
-}
-setInterval(pollRefresh, 10000);
 
 init();
 </script>
