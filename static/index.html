@@ -503,6 +503,8 @@ const IMPORTED_LEAVE_BATCH_1 = [
   {empNo:"01", type:"half", startDate:"2026-02-10", endDate:"2026-02-10", days:0.5, halfType:"am"},
   {empNo:"04", type:"annual", startDate:"2026-07-15", endDate:"2026-07-15", days:1},
   {empNo:"05", type:"annual", startDate:"2026-02-12", endDate:"2026-02-12", days:1},
+  {empNo:"05", type:"annual", startDate:"2026-08-14", endDate:"2026-08-14", days:1},
+  {empNo:"05", type:"annual", startDate:"2026-08-18", endDate:"2026-08-18", days:1},
   {empNo:"06", type:"annual", startDate:"2026-01-12", endDate:"2026-01-12", days:1},
   {empNo:"06", type:"annual", startDate:"2026-04-27", endDate:"2026-04-27", days:1},
   {empNo:"06", type:"annual", startDate:"2026-05-22", endDate:"2026-05-22", days:1},
@@ -514,6 +516,8 @@ const IMPORTED_LEAVE_BATCH_1 = [
   {empNo:"07", type:"annual", startDate:"2026-03-16", endDate:"2026-03-16", days:1},
   {empNo:"07", type:"annual", startDate:"2026-06-18", endDate:"2026-06-18", days:1},
   {empNo:"07", type:"annual", startDate:"2026-06-19", endDate:"2026-06-19", days:1},
+  {empNo:"07", type:"annual", startDate:"2026-08-10", endDate:"2026-08-10", days:1},
+  {empNo:"07", type:"annual", startDate:"2026-08-18", endDate:"2026-08-18", days:1},
   {empNo:"08", type:"annual", startDate:"2026-02-09", endDate:"2026-02-09", days:1},
   {empNo:"08", type:"annual", startDate:"2026-05-04", endDate:"2026-05-04", days:1},
   {empNo:"08", type:"annual", startDate:"2026-07-20", endDate:"2026-07-20", days:1},
@@ -528,8 +532,10 @@ const IMPORTED_LEAVE_BATCH_1 = [
   {empNo:"14", type:"annual", startDate:"2026-04-16", endDate:"2026-04-16", days:1},
   {empNo:"14", type:"half", startDate:"2026-05-15", endDate:"2026-05-15", days:0.5, halfType:"am"},
   {empNo:"16", type:"annual", startDate:"2026-02-10", endDate:"2026-02-10", days:1},
+  {empNo:"16", type:"annual", startDate:"2026-08-07", endDate:"2026-08-07", days:1},
   {empNo:"16", type:"half", startDate:"2026-05-22", endDate:"2026-05-22", days:0.5, halfType:"am"},
   {empNo:"16", type:"half", startDate:"2026-06-26", endDate:"2026-06-26", days:0.5, halfType:"am"},
+  {empNo:"16", type:"half", startDate:"2026-07-30", endDate:"2026-07-30", days:0.5, halfType:"am"},
   {empNo:"17", type:"annual", startDate:"2026-01-23", endDate:"2026-01-23", days:1},
   {empNo:"17", type:"annual", startDate:"2026-07-22", endDate:"2026-07-22", days:1},
   {empNo:"17", type:"half", startDate:"2026-04-22", endDate:"2026-04-22", days:0.5, halfType:"am"},
@@ -559,6 +565,7 @@ const IMPORTED_LEAVE_BATCH_1 = [
   {empNo:"26", type:"annual", startDate:"2026-05-11", endDate:"2026-05-11", days:1},
   {empNo:"26", type:"annual", startDate:"2026-06-11", endDate:"2026-06-11", days:1},
   {empNo:"26", type:"annual", startDate:"2026-06-12", endDate:"2026-06-12", days:1},
+  {empNo:"26", type:"annual", startDate:"2026-07-27", endDate:"2026-07-27", days:1},
   {empNo:"26", type:"half", startDate:"2026-03-18", endDate:"2026-03-18", days:0.5, halfType:"am"},
   {empNo:"27", type:"annual", startDate:"2025-12-26", endDate:"2025-12-26", days:1},
   {empNo:"27", type:"annual", startDate:"2026-02-02", endDate:"2026-02-02", days:1},
@@ -636,6 +643,9 @@ const IMPORTED_LEAVE_BATCH_1 = [
   {empNo:"50", type:"annual", startDate:"2026-03-24", endDate:"2026-03-24", days:1},
   {empNo:"50", type:"annual", startDate:"2026-04-30", endDate:"2026-04-30", days:1},
   {empNo:"50", type:"annual", startDate:"2026-07-16", endDate:"2026-07-16", days:1},
+  {empNo:"50", type:"annual", startDate:"2026-08-03", endDate:"2026-08-03", days:1},
+  {empNo:"50", type:"annual", startDate:"2026-08-04", endDate:"2026-08-04", days:1},
+  {empNo:"50", type:"annual", startDate:"2026-08-07", endDate:"2026-08-07", days:1},
   {empNo:"50", type:"half", startDate:"2026-02-06", endDate:"2026-02-06", days:0.5, halfType:"am"},
   {empNo:"50", type:"half", startDate:"2026-05-15", endDate:"2026-05-15", days:0.5, halfType:"am"},
   {empNo:"50", type:"half", startDate:"2026-06-22", endDate:"2026-06-22", days:0.5, halfType:"am"},
@@ -668,6 +678,7 @@ let state = {
   formFamilySub: 'parent',
   formDefenseSub: 'reserve',
   formEtcSub: 'edu',
+  formTargetEmployeeId: null,
 };
 
 function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -803,7 +814,7 @@ async function loadData(){
       state.data.empNoPadded = true;
       await saveData();
     }
-    if(!state.data.importedLeaveBatch2){
+    if(!state.data.importedLeaveBatch3){
       // 엑셀 데이터가 수정되어 재반영: 기존에 일괄 반영했던 기록은 지우고 최신 데이터로 다시 반영
       state.data.requests = state.data.requests.filter(r=>!r.bulkImported);
       IMPORTED_LEAVE_BATCH_1.forEach(rec=>{
@@ -820,7 +831,7 @@ async function loadData(){
         };
         state.data.requests.push(newReq);
       });
-      state.data.importedLeaveBatch2 = true;
+      state.data.importedLeaveBatch3 = true;
       await saveData();
     }
     if(!state.data.defaultPasswordUpdatedV1){
@@ -910,7 +921,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch2: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true };
     await saveData();
   }
 }
@@ -945,7 +956,9 @@ function findTeamLeader(team){
   return state.data.employees.find(e=>e.team===team && LEADER_POSITIONS.includes(e.position));
 }
 function canApprove(r){
-  if(!state.me || !state.me.isApprover) return false;
+  if(!state.me) return false;
+  if(state.me.canCancelApproved) return true; // 승인취소 권한자는 타인 결재도 전부 가능
+  if(!state.me.isApprover) return false;
   const owner = empById(r.employeeId);
   if(!owner) return false;
   if(r.type==='overtime'){
@@ -968,6 +981,7 @@ function canApprove(r){
 }
 function isApprovalRelevant(r, viewer){
   // 승인함에 표시할지 여부: 본인이 처리할 수 있거나(현재/과거), 본인이 실제로 처리한 이력이 있는 요청만 노출
+  if(viewer.canCancelApproved) return true; // 승인취소 권한자는 전체 요청을 볼 수 있음
   const owner = empById(r.employeeId);
   if(!owner) return false;
   if(r.type==='overtime'){
@@ -978,7 +992,7 @@ function isApprovalRelevant(r, viewer){
   return (leader && leader.id===viewer.id) || r.approverId===viewer.id;
 }
 function myPendingCount(){
-  if(!state.me || !state.me.isApprover) return 0;
+  if(!state.me || !(state.me.isApprover || state.me.canCancelApproved)) return 0;
   return state.data.requests.filter(r=>(r.status==='pending'||r.status==='pending_hr') && canApprove(r)).length;
 }
 function visibleEmployeesForStatus(viewer){
@@ -1067,7 +1081,7 @@ function navItems(){
   ];
   if(state.me.canViewDetailLog) items.push({id:'leave-status-detail', icon:'🔍', label:'연차현황 상세'});
   items.push({id:'overtime-status', icon:'🕐', label:'연장근무 현황'});
-  if(state.me.isApprover) items.push({id:'approvals', icon:'✓', label:'승인함', badge: myPendingCount()});
+  if(state.me.isApprover || state.me.canCancelApproved) items.push({id:'approvals', icon:'✓', label:'승인함', badge: myPendingCount()});
   items.push({id:'calendar', icon:'▦', label:'회사 캘린더'});
   items.push({id:'account', icon:'🔑', label:'계정설정'});
   if(state.me.isAdmin || state.me.canUploadRoster) items.push({id:'members', icon:'☺', label:'구성원 관리'});
@@ -1095,7 +1109,7 @@ function renderApp(){
       </nav>
       <div class="side-user">
         <div class="side-user-name">${state.me.name}</div>
-        <div class="side-user-role">${state.me.team||''} ${state.me.position||''} ${state.me.isApprover?'· 승인자':''}</div>
+        <div class="side-user-role">${state.me.team||''} ${state.me.position||''} ${state.me.isApprover?'· 승인자':''}${state.me.canCancelApproved?' · 전체결재권':''}</div>
         <span class="switch-link" id="switch-user">다른 계정으로 전환</span>
       </div>
     </div>
@@ -1164,9 +1178,9 @@ function renderDashboard(main){
         <div class="stat-sub">누적 신청 건</div>
       </div>
       <div class="card stat-card">
-        <div class="stat-label">${state.me.isApprover? '결재 대기' : '전체 구성원'}</div>
-        <div class="stat-value">${state.me.isApprover? pendingAll.length : state.data.employees.length}</div>
-        <div class="stat-sub">${state.me.isApprover? '승인 대기 중인 요청':'등록된 구성원 수'}</div>
+        <div class="stat-label">${(state.me.isApprover||state.me.canCancelApproved)? '결재 대기' : '전체 구성원'}</div>
+        <div class="stat-value">${(state.me.isApprover||state.me.canCancelApproved)? pendingAll.length : state.data.employees.length}</div>
+        <div class="stat-sub">${(state.me.isApprover||state.me.canCancelApproved)? '승인 대기 중인 요청':'등록된 구성원 수'}</div>
       </div>
     </div>
     <div class="grid grid-2">
@@ -1252,6 +1266,7 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel)
       ${r.autoApproved? `<div class="req-reason" style="color:var(--green);">⚡ 자동승인 — 기안자가 팀장/지점장/부사장이라 별도 결재 없이 처리됨</div>`:''}
       ${r.noApprovalNeeded? `<div class="req-reason" style="color:#3B7B7B;">🧳 출장은 결재 없이 신청 즉시 등록돼요 — 동료들이 행방을 알 수 있도록 캘린더에 표시돼요</div>`:''}
       ${r.bulkImported? `<div class="req-reason" style="color:var(--muted);">📥 엑셀로 일괄 반영된 기록이에요 (사후신청 아님)</div>`:''}
+      ${r.filedBy? `<div class="req-reason" style="color:var(--muted);">✍️ ${empName(r.filedBy)}님이 대리로 기안했어요</div>`:''}
       ${note? `<div class="req-reason" style="color:var(--amber);">${note}</div>`:''}
     </div>
     ${showApproverActions && (r.status==='pending'||r.status==='pending_hr') ? `
@@ -1279,6 +1294,16 @@ function renderRequestForm(main){
       <p class="page-desc">유형을 선택하고 필요한 정보를 입력한 뒤 제출하세요. 제출 즉시 승인자에게 전달돼요.</p>
     </div>
     <div class="card form-card">
+      ${state.me.canCancelApproved ? `
+      <div class="field">
+        <label>신청 대상자 <span style="font-weight:600; color:var(--muted); font-size:11.5px;">승인취소 권한자는 타인 명의로도 신청할 수 있어요</span></label>
+        <select id="target-employee">
+          ${state.data.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko')).map(e=>`
+            <option value="${e.id}" ${(state.formTargetEmployeeId||state.me.id)===e.id?'selected':''}>${e.name}${e.id===state.me.id?' (본인)':''} · ${e.team||''}</option>
+          `).join('')}
+        </select>
+      </div>
+      `:''}
       <div class="type-grid" id="type-grid">
         ${Object.entries(LEAVE_TYPES).map(([key,t])=>`
           <div class="type-opt ${state.formType===key?'selected':''}" data-type="${key}">${t.icon}<br>${t.label}</div>
@@ -1292,6 +1317,10 @@ function renderRequestForm(main){
       <button class="btn btn-primary" id="submit-req">신청 제출</button>
     </div>
   `;
+  const targetSel = document.getElementById('target-employee');
+  if(targetSel){
+    targetSel.onchange = ()=>{ state.formTargetEmployeeId = targetSel.value; renderDateFields(); };
+  }
   document.querySelectorAll('[data-type]').forEach(el=>{
     el.onclick = ()=>{ state.formType = el.dataset.type; renderRequestForm(main); };
   });
@@ -1300,6 +1329,7 @@ function renderRequestForm(main){
   document.getElementById('submit-req').onclick = async ()=>{
     const type = state.formType;
     const t = LEAVE_TYPES[type];
+    const targetEmp = (state.me.canCancelApproved && state.formTargetEmployeeId) ? (empById(state.formTargetEmployeeId)||state.me) : state.me;
     let startDate, endDate, halfType=null, splitStart=null, splitEnd=null, otStart=null, otEnd=null, otMinutes=null, familySub=null, subType=null, days=0;
     if(type==='half'){
       startDate = endDate = document.getElementById('single-date').value;
@@ -1352,15 +1382,15 @@ function renderRequestForm(main){
     }
 
     if(t.deduct){
-      const remain = state.me.annualTotal - annualUsed(state.me.id);
+      const remain = targetEmp.annualTotal - annualUsed(targetEmp.id);
       if(days > remain){
-        showLimitModal(`잔여 연차는 <strong>${trimNum(remain)}일 (${daysToHours(remain)}시간)</strong>이에요.<br>${trimNum(days)}일(${daysToHours(days)}시간)은 신청할 수 없어요.`);
+        showLimitModal(`${targetEmp.id!==state.me.id? `${targetEmp.name}님의 ` : ''}잔여 연차는 <strong>${trimNum(remain)}일 (${daysToHours(remain)}시간)</strong>이에요.<br>${trimNum(days)}일(${daysToHours(days)}시간)은 신청할 수 없어요.`);
         return;
       }
     }
 
     if(BLOCKING_TYPES.includes(type)){
-      const conflict = findDateConflict(state.me.id, startDate, endDate);
+      const conflict = findDateConflict(targetEmp.id, startDate, endDate);
       if(conflict){
         const ct = LEAVE_TYPES[conflict.type];
         const conflictDateLabel = conflict.startDate===conflict.endDate ? conflict.startDate : `${conflict.startDate} ~ ${conflict.endDate}`;
@@ -1371,10 +1401,11 @@ function renderRequestForm(main){
     const reason = document.getElementById('reason-input').value.trim();
 
     const newReq = {
-      id: uid('req'), employeeId: state.me.id, type, startDate, endDate,
+      id: uid('req'), employeeId: targetEmp.id, type, startDate, endDate,
       halfType, splitStart, splitEnd, otStart, otEnd, otMinutes, familySub, subType,
       days, reason, status:'pending', rejectReason:'', createdAt: Date.now(),
-      isBackdated: parseDate(startDate) < parseDate(todayStr())
+      isBackdated: parseDate(startDate) < parseDate(todayStr()),
+      filedBy: targetEmp.id!==state.me.id ? state.me.id : null
     };
 
     // 출장은 결재가 필요 없는 유형: 누구든 신청 즉시 등록(승인) 처리
@@ -1383,23 +1414,23 @@ function renderRequestForm(main){
       newReq.approverId = null;
       newReq.noApprovalNeeded = true;
     }
-    // 팀장/지점장/부사장 본인 기안 건은 결재 없이 자동승인 (로그로 남김)
-    else if(isLeaderPosition(state.me)){
+    // 팀장/지점장/부사장 본인 기안 건은 결재 없이 자동승인 (대상자 기준, 대리 기안이어도 동일하게 적용)
+    else if(isLeaderPosition(targetEmp)){
       if(type==='overtime'){
-        newReq.teamApproverId = state.me.id;
+        newReq.teamApproverId = targetEmp.id;
         newReq.teamApprovedAt = Date.now();
         newReq.autoApproved = true;
-        if(isFinalOvertimeApprover(state.me)){
+        if(isFinalOvertimeApprover(targetEmp)){
           newReq.status = 'approved';
-          newReq.hrApproverId = state.me.id;
+          newReq.hrApproverId = targetEmp.id;
           newReq.hrApprovedAt = Date.now();
-          newReq.approverId = state.me.id;
+          newReq.approverId = targetEmp.id;
         }else{
           newReq.status = 'pending_hr';
         }
       }else{
         newReq.status = 'approved';
-        newReq.approverId = state.me.id;
+        newReq.approverId = targetEmp.id;
         newReq.autoApproved = true;
       }
     }
@@ -1419,7 +1450,8 @@ function renderRequestForm(main){
 function renderDateFields(){
   const box = document.getElementById('date-fields');
   const type = state.formType;
-  const remain = state.me.annualTotal - annualUsed(state.me.id);
+  const targetEmp = (state.me.canCancelApproved && state.formTargetEmployeeId) ? (empById(state.formTargetEmployeeId)||state.me) : state.me;
+  const remain = targetEmp.annualTotal - annualUsed(targetEmp.id);
   const remainHours = daysToHours(remain);
   if(type==='half'){
     box.innerHTML = `
