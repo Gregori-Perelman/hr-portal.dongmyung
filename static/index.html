@@ -2548,6 +2548,39 @@ async function init(){
   }
   renderLogin();
 }
+
+// ===== 자동 새로고침 (10초마다) =====
+// 로그인된 상태에서만, 입력 중일 수 있는 화면(신청하기/계정설정)이 아닐 때만 화면을 다시 그린다.
+// 서버에서 최신 데이터만 조용히 다시 받아오고, 폼 입력 중인 화면은 건드리지 않는다.
+let isPolling = false;
+async function pollRefresh(){
+  if(!state.me || isPolling) return;
+  isPolling = true;
+  try{
+    const res = await window.storage.get(SHARED_KEY, true);
+    const freshData = JSON.parse(res.value);
+    state.data = freshData;
+    const meId = state.me.id;
+    const updatedMe = state.data.employees.find(e=>e.id===meId);
+    if(updatedMe){
+      state.me = updatedMe;
+    }else{
+      // 본인 계정이 삭제된 경우: 로그아웃 처리
+      state.me = null;
+      renderLogin();
+      isPolling = false;
+      return;
+    }
+    if(state.view!=='request' && state.view!=='account'){
+      renderApp();
+    }
+  }catch(e){
+    // 폴링 중 오류는 조용히 무시(다음 주기에 다시 시도)
+  }
+  isPolling = false;
+}
+setInterval(pollRefresh, 10000);
+
 init();
 </script>
 </body>
