@@ -452,7 +452,7 @@ const DEFAULT_PASSWORD = 'dmbrg';
 const ORG_VERSION = 3; // 조직도가 바뀌면 이 값을 올려서 자동 재시딩
 
 const SEED_EMPLOYEES = [
-  { empNo:'09', name:'이동원',    team:'본사',       position:'대표이사', annualTotal:0, isAdmin:true, canUploadRoster:true, canViewDetailLog:true },
+  { empNo:'09', name:'이동원',    team:'본사',       position:'대표이사', annualTotal:0, isAdmin:true, canUploadRoster:true, canViewDetailLog:true, canSelfCancelApproved:true },
   { empNo:'21', name:'허재관',    team:'본사',       position:'부사장', annualTotal:22 },
   { empNo:'41', name:'심대흥',    team:'본사영업부',  position:'팀원',  annualTotal:16 },
   { empNo:'33', name:'신상무',    team:'서울지점',    position:'지점장', annualTotal:19 },
@@ -780,6 +780,7 @@ function buildSeedEmployees(){
     canUploadRoster: !!s.canUploadRoster,
     canCancelApproved: !!s.canCancelApproved,
     canViewDetailLog: !!s.canViewDetailLog,
+    canSelfCancelApproved: !!s.canSelfCancelApproved,
     annualTotal: s.annualTotal, baseUsed: 0,
   }));
 }
@@ -906,6 +907,13 @@ async function loadData(){
       state.data.grantedOwnerViewV1 = true;
       await saveData();
     }
+    if(!state.data.grantedOwnerSelfCancelV1){
+      // 이동원(대표이사)이 본인이 올린(자동승인된) 신청을 스스로 취소할 수 있게 부여
+      const owner = state.data.employees.find(e=>String(e.empNo).padStart(2,'0')==='09');
+      if(owner){ owner.canSelfCancelApproved = true; }
+      state.data.grantedOwnerSelfCancelV1 = true;
+      await saveData();
+    }
   }catch(e){
     const freshEmployees = buildSeedEmployees();
     const freshRequests = [];
@@ -922,7 +930,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true };
     await saveData();
   }
 }
@@ -1066,6 +1074,7 @@ function navItems(){
     const ownerItems = [
       {id:'dashboard', icon:'◆', label:'대시보드'},
       {id:'request', icon:'✎', label:'신청하기'},
+      {id:'my-requests', icon:'☰', label:'내 신청내역'},
       {id:'leave-status', icon:'📊', label:'연차현황'},
     ];
     if(state.me.canViewDetailLog) ownerItems.push({id:'leave-status-detail', icon:'🔍', label:'연차현황 상세'});
@@ -1291,6 +1300,9 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel)
     ${showActions && (r.status==='pending'||r.status==='pending_hr') ? `
       <button class="btn btn-sm btn-danger" data-cancel="${r.id}" style="margin-left:8px;">신청 취소</button>
     `:''}
+    ${showActions && r.status==='approved' && r.employeeId===state.me.id && state.me.canSelfCancelApproved ? `
+      <button class="btn btn-sm btn-danger" data-self-cancel="${r.id}" style="margin-left:8px;">신청 취소</button>
+    `:''}
     ${showAdminCancel && r.status==='approved' ? `
       <button class="btn btn-sm btn-danger" data-admin-cancel="${r.id}" style="margin-left:8px;">승인 취소(철회)</button>
     `:''}
@@ -1435,7 +1447,7 @@ function renderRequestForm(main){
       newReq.noApprovalNeeded = true;
     }
     // 팀장/지점장/부사장 본인 기안 건은 결재 없이 자동승인 (대상자 기준, 대리 기안이어도 동일하게 적용)
-    else if(isLeaderPosition(targetEmp)){
+    else if(isLeaderPosition(targetEmp) || String(targetEmp.empNo).padStart(2,'0')==='09'){
       if(type==='overtime'){
         newReq.teamApproverId = targetEmp.id;
         newReq.teamApprovedAt = Date.now();
@@ -1674,6 +1686,19 @@ function renderMyRequests(main){
     btn.onclick = async ()=>{
       const id = btn.dataset.cancel;
       state.data.requests = state.data.requests.filter(r=>r.id!==id);
+      await saveData();
+      showToast('신청을 취소했어요.');
+      renderMyRequests(main);
+    };
+  });
+  document.querySelectorAll('[data-self-cancel]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const r = state.data.requests.find(x=>x.id===btn.dataset.selfCancel);
+      if(!r || r.employeeId!==state.me.id || !state.me.canSelfCancelApproved) return;
+      if(!confirm('이미 승인된 신청을 취소할까요?')) return;
+      r.status = 'cancelled';
+      r.cancelledBy = state.me.id;
+      r.cancelledAt = Date.now();
       await saveData();
       showToast('신청을 취소했어요.');
       renderMyRequests(main);
@@ -2663,6 +2688,36 @@ async function init(){
   }
   renderLogin();
 }
+
+// ===== 자동 새로고침 (12분마다) =====
+// 로그인된 상태에서만, 입력 중일 수 있는 화면(신청하기/계정설정)이 아닐 때만 화면을 다시 그린다.
+let isPolling = false;
+async function pollRefresh(){
+  if(!state.me || isPolling) return;
+  isPolling = true;
+  try{
+    const res = await window.storage.get(SHARED_KEY, true);
+    const freshData = JSON.parse(res.value);
+    state.data = freshData;
+    const meId = state.me.id;
+    const updatedMe = state.data.employees.find(e=>e.id===meId);
+    if(updatedMe){
+      state.me = updatedMe;
+    }else{
+      state.me = null;
+      renderLogin();
+      isPolling = false;
+      return;
+    }
+    if(state.view!=='request' && state.view!=='account'){
+      renderApp();
+    }
+  }catch(e){
+    // 폴링 중 오류는 조용히 무시(다음 주기에 다시 시도)
+  }
+  isPolling = false;
+}
+setInterval(pollRefresh, 12*60*1000);
 
 init();
 </script>
