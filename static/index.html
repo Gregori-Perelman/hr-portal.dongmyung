@@ -395,7 +395,7 @@ const LEAVE_TYPES = {
   family:   { label:'경조휴가',  icon:'🎗️', deduct:false, color:'#C4901F', soft:'#C4901F18', range:false },
   overtime: { label:'연장근무',  icon:'⏰', deduct:false, color:'#5C4A8A', soft:'#5C4A8A18', range:false },
   busytrip: { label:'출장',      icon:'✈️', deduct:false, color:'#3B7B7B', soft:'#3B7B7B18', range:true, noApproval:true },
-  etc:      { label:'기타',      icon:'📌', deduct:false, color:'#8A93A6', soft:'#8A93A618', range:true  },
+  etc:      { label:'기타',      icon:'📌', deduct:false, color:'#8A93A6', soft:'#8A93A618', range:true, noApproval:true },
 };
 const FAMILY_SUBTYPES = {
   parent:              { label:'부모상/처가부모상', days:5 },
@@ -680,6 +680,7 @@ let state = {
   formEtcSub: 'edu',
   formTargetEmployeeId: null,
   approvalLogSort: 'time',
+  editingRequestId: null,
 };
 
 function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -914,6 +915,10 @@ async function loadData(){
       state.data.grantedOwnerSelfCancelV1 = true;
       await saveData();
     }
+    if(!state.data.deletionLog){
+      state.data.deletionLog = [];
+      await saveData();
+    }
   }catch(e){
     const freshEmployees = buildSeedEmployees();
     const freshRequests = [];
@@ -930,7 +935,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true };
     await saveData();
   }
 }
@@ -1080,6 +1085,7 @@ function navItems(){
     if(state.me.canViewDetailLog) ownerItems.push({id:'leave-status-detail', icon:'🔍', label:'연차현황 상세'});
     ownerItems.push({id:'overtime-status', icon:'🕐', label:'연장근무 현황'});
     if(state.me.isAdmin) ownerItems.push({id:'approval-log', icon:'📜', label:'결재내역'});
+    if(state.me.isAdmin) ownerItems.push({id:'deletion-log', icon:'🗑', label:'삭제내역'});
     ownerItems.push({id:'calendar', icon:'▦', label:'회사 캘린더'});
     ownerItems.push({id:'account', icon:'🔑', label:'계정설정'});
     ownerItems.push({id:'members', icon:'☺', label:'구성원 관리'});
@@ -1095,6 +1101,7 @@ function navItems(){
   items.push({id:'overtime-status', icon:'🕐', label:'연장근무 현황'});
   if(state.me.isApprover || state.me.canCancelApproved) items.push({id:'approvals', icon:'✓', label:'승인함', badge: myPendingCount()});
   if(state.me.isAdmin) items.push({id:'approval-log', icon:'📜', label:'결재내역'});
+  if(state.me.isAdmin) items.push({id:'deletion-log', icon:'🗑', label:'삭제내역'});
   items.push({id:'calendar', icon:'▦', label:'회사 캘린더'});
   items.push({id:'account', icon:'🔑', label:'계정설정'});
   if(state.me.isAdmin || state.me.canUploadRoster) items.push({id:'members', icon:'☺', label:'구성원 관리'});
@@ -1136,7 +1143,7 @@ function renderApp(){
     <div class="main" id="main"></div>
   `;
   items.forEach(it=>{
-    document.querySelector(`[data-nav="${it.id}"]`).onclick = ()=>{ state.view=it.id; renderApp(); };
+    document.querySelector(`[data-nav="${it.id}"]`).onclick = ()=>{ state.editingRequestId = null; state.view=it.id; renderApp(); };
   });
   document.getElementById('switch-user').onclick = async ()=>{
     await saveIdentity('');
@@ -1159,6 +1166,7 @@ function renderMain(){
   if(state.view==='leave-status-detail') return renderLeaveStatusDetail(main);
   if(state.view==='overtime-status') return renderOvertimeStatus(main);
   if(state.view==='approval-log') return renderApprovalLog(main);
+  if(state.view==='deletion-log') return renderDeletionLog(main);
   if(state.view==='approvals') return renderApprovals(main);
   if(state.view==='calendar') return renderCalendar(main);
   if(state.view==='account') return renderAccountSettings(main);
@@ -1286,7 +1294,7 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel)
       ${r.type==='overtime' && r.status==='approved' ? `<div class="req-reason">1차 승인: ${empName(r.teamApproverId)} · 최종 승인: ${empName(r.hrApproverId)}</div>`:''}
       ${r.type==='overtime' && r.status==='pending_hr' && r.teamApproverId ? `<div class="req-reason">1차 승인: ${empName(r.teamApproverId)}</div>`:''}
       ${r.autoApproved? `<div class="req-reason" style="color:var(--green);">⚡ 자동승인 — 기안자가 팀장/지점장/부사장이라 별도 결재 없이 처리됨</div>`:''}
-      ${r.noApprovalNeeded? `<div class="req-reason" style="color:#3B7B7B;">🧳 출장은 결재 없이 신청 즉시 등록돼요 — 동료들이 행방을 알 수 있도록 캘린더에 표시돼요</div>`:''}
+      ${r.noApprovalNeeded? `<div class="req-reason" style="color:#3B7B7B;">${t.icon} ${t.label}은(는) 결재 없이 신청 즉시 등록돼요</div>`:''}
       ${r.bulkImported? `<div class="req-reason" style="color:var(--muted);">📥 엑셀로 일괄 반영된 기록이에요 (사후신청 아님)</div>`:''}
       ${r.filedBy? `<div class="req-reason" style="color:var(--muted);">✍️ ${empName(r.filedBy)}님이 대리로 기안했어요</div>`:''}
       ${note? `<div class="req-reason" style="color:var(--amber);">${note}</div>`:''}
@@ -1300,8 +1308,9 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel)
     ${showActions && (r.status==='pending'||r.status==='pending_hr') ? `
       <button class="btn btn-sm btn-danger" data-cancel="${r.id}" style="margin-left:8px;">신청 취소</button>
     `:''}
-    ${showActions && r.status==='approved' && r.employeeId===state.me.id && state.me.canSelfCancelApproved ? `
-      <button class="btn btn-sm btn-danger" data-self-cancel="${r.id}" style="margin-left:8px;">신청 취소</button>
+    ${showActions && r.employeeId===state.me.id && state.me.canSelfCancelApproved ? `
+      <button class="btn btn-sm btn-ghost" data-edit-req="${r.id}" style="width:auto; margin-left:8px;">수정</button>
+      <button class="btn btn-sm btn-danger" data-delete-req="${r.id}" style="margin-left:8px;">삭제</button>
     `:''}
     ${showAdminCancel && r.status==='approved' ? `
       <button class="btn btn-sm btn-danger" data-admin-cancel="${r.id}" style="margin-left:8px;">승인 취소(철회)</button>
@@ -1322,6 +1331,12 @@ function renderRequestForm(main){
       <p class="page-desc">${isOwnerRestricted? '출장 또는 기타만 등록할 수 있어요.' : '유형을 선택하고 필요한 정보를 입력한 뒤 제출하세요. 제출 즉시 승인자에게 전달돼요.'}</p>
     </div>
     <div class="card form-card">
+      ${state.editingRequestId ? `
+      <div class="hint" style="background:var(--amber-soft); color:var(--ink-soft); border-radius:8px; padding:10px 12px; margin-bottom:14px;">
+        ✏️ <strong>기존 신청을 수정하는 중</strong>이에요. 내용을 고치고 "수정 완료"를 눌러주세요.
+        <span id="cancel-edit-link" style="text-decoration:underline; cursor:pointer; margin-left:8px;">수정 취소</span>
+      </div>
+      `:''}
       ${state.me.canCancelApproved ? `
       <div class="field">
         <label>신청 대상자 <span style="font-weight:600; color:var(--muted); font-size:11.5px;">승인취소 권한자는 타인 명의로도 신청할 수 있어요</span></label>
@@ -1342,9 +1357,13 @@ function renderRequestForm(main){
         <label>사유 (선택)</label>
         <textarea id="reason-input" rows="2" placeholder="간단한 사유를 남겨주세요"></textarea>
       </div>
-      <button class="btn btn-primary" id="submit-req">신청 제출</button>
+      <button class="btn btn-primary" id="submit-req">${state.editingRequestId? '수정 완료' : '신청 제출'}</button>
     </div>
   `;
+  const cancelEditLink = document.getElementById('cancel-edit-link');
+  if(cancelEditLink){
+    cancelEditLink.onclick = ()=>{ state.editingRequestId = null; renderRequestForm(main); };
+  }
   const targetSel = document.getElementById('target-employee');
   if(targetSel){
     targetSel.onchange = ()=>{ state.formTargetEmployeeId = targetSel.value; renderDateFields(); };
@@ -1353,6 +1372,19 @@ function renderRequestForm(main){
     el.onclick = ()=>{ state.formType = el.dataset.type; renderRequestForm(main); };
   });
   renderDateFields();
+
+  // 수정 모드면 기존 값으로 날짜/사유 필드를 다시 채워넣는다
+  if(state.editingRequestId){
+    const editingReq = state.data.requests.find(r=>r.id===state.editingRequestId);
+    if(editingReq){
+      const startEl = document.getElementById('start-date') || document.getElementById('single-date') || document.getElementById('family-start');
+      const endEl = document.getElementById('end-date');
+      if(startEl) startEl.value = editingReq.startDate;
+      if(endEl) endEl.value = editingReq.endDate;
+      const reasonEl = document.getElementById('reason-input');
+      if(reasonEl) reasonEl.value = editingReq.reason || '';
+    }
+  }
 
   document.getElementById('submit-req').onclick = async ()=>{
     const type = state.formType;
@@ -1471,6 +1503,26 @@ function renderRequestForm(main){
     if(newReq.noApprovalNeeded) showToastMsg = '출장이 등록됐어요. 별도 결재 없이 바로 반영돼요.';
     else if(newReq.status==='approved') showToastMsg = '신청이 제출과 동시에 자동 승인됐어요.';
     else if(newReq.status==='pending_hr') showToastMsg = `1차(본인) 승인이 자동 처리됐어요. ${finalApproverName()}님의 최종 승인만 남았어요.`;
+
+    if(state.editingRequestId){
+      // 수정 모드: 새로 만들지 않고 기존 레코드의 내용만 갱신 (상태/승인정보는 유지)
+      const idx = state.data.requests.findIndex(r=>r.id===state.editingRequestId);
+      if(idx>-1){
+        const existing = state.data.requests[idx];
+        state.data.requests[idx] = {
+          ...existing,
+          type, startDate, endDate, halfType, splitStart, splitEnd, otStart, otEnd, otMinutes, familySub, subType,
+          days, reason,
+          isBackdated: parseDate(startDate) < parseDate(todayStr())
+        };
+      }
+      await saveData();
+      showToast('신청 내용을 수정했어요.');
+      state.editingRequestId = null;
+      state.view='my-requests';
+      renderApp();
+      return;
+    }
 
     state.data.requests.push(newReq);
     await saveData();
@@ -1665,7 +1717,7 @@ function renderDateFields(){
           <input type="date" id="end-date" min="${minAllowedDateStr()}" value="${todayStr()}">
         </div>
       </div>
-      <div class="hint">${LEAVE_TYPES[type].deduct? `현재 잔여 연차 <strong>${remain}일 (${remainHours}시간)</strong> · 주말·공휴일을 제외한 영업일 기준으로 차감돼요 (1일=8시간).` : (LEAVE_TYPES[type].noApproval? '출장은 연차 차감도 없고, 결재 없이 신청 즉시 바로 등록돼요.' : '이 유형은 연차에서 차감되지 않아요.')} 오늘 기준 최대 10일 전까지 사후 신청 가능해요.</div>`;
+      <div class="hint">${LEAVE_TYPES[type].deduct? `현재 잔여 연차 <strong>${remain}일 (${remainHours}시간)</strong> · 주말·공휴일을 제외한 영업일 기준으로 차감돼요 (1일=8시간).` : (LEAVE_TYPES[type].noApproval? '이 유형은 연차 차감도 없고, 결재 없이 신청 즉시 바로 등록돼요.' : '이 유형은 연차에서 차감되지 않아요.')} 오늘 기준 최대 10일 전까지 사후 신청 가능해요.</div>`;
   }
 }
 
@@ -1691,17 +1743,29 @@ function renderMyRequests(main){
       renderMyRequests(main);
     };
   });
-  document.querySelectorAll('[data-self-cancel]').forEach(btn=>{
+  document.querySelectorAll('[data-delete-req]').forEach(btn=>{
     btn.onclick = async ()=>{
-      const r = state.data.requests.find(x=>x.id===btn.dataset.selfCancel);
+      const r = state.data.requests.find(x=>x.id===btn.dataset.deleteReq);
       if(!r || r.employeeId!==state.me.id || !state.me.canSelfCancelApproved) return;
-      if(!confirm('이미 승인된 신청을 취소할까요?')) return;
-      r.status = 'cancelled';
-      r.cancelledBy = state.me.id;
-      r.cancelledAt = Date.now();
+      if(!confirm('이 신청을 완전히 삭제할까요? 되돌릴 수 없어요.')) return;
+      state.data.requests = state.data.requests.filter(x=>x.id!==r.id);
       await saveData();
-      showToast('신청을 취소했어요.');
+      showToast('신청을 삭제했어요.');
       renderMyRequests(main);
+    };
+  });
+  document.querySelectorAll('[data-edit-req]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const r = state.data.requests.find(x=>x.id===btn.dataset.editReq);
+      if(!r || r.employeeId!==state.me.id || !state.me.canSelfCancelApproved) return;
+      state.editingRequestId = r.id;
+      state.formType = r.type;
+      if(r.type==='etc') state.formEtcSub = r.subType || 'edu';
+      if(r.type==='reserve') state.formDefenseSub = r.subType || 'reserve';
+      if(r.type==='half') state.formHalf = r.halfType || 'am';
+      if(r.type==='family') state.formFamilySub = r.familySub || 'parent';
+      state.view = 'request';
+      renderApp();
     };
   });
 }
@@ -2010,6 +2074,7 @@ function decisionStatusText(r){
 }
 function renderApprovalLog(main){
   const decided = state.data.requests.filter(r=>r.status==='approved'||r.status==='rejected'||r.status==='cancelled');
+  const canDelete = !!state.me.isAdmin;
   main.innerHTML = `
     <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
       <div>
@@ -2041,8 +2106,10 @@ function renderApprovalLog(main){
       <td style="font-family:var(--mono); font-size:12px;">${dateRange}</td>
       <td style="font-size:12.5px; font-weight:700;">${decisionStatusText(r)}</td>
       <td style="font-size:12.5px; color:var(--ink-soft);">${approverDisplayText(r)}</td>
+      ${canDelete? `<td><button class="btn btn-sm btn-danger" data-log-delete="${r.id}">삭제</button></td>`:''}
     </tr>`;
   };
+  const theadCols = `<th>날짜</th><th>이름</th><th>팀</th><th>유형</th><th>기간</th><th>결과</th><th>처리자</th>${canDelete? '<th></th>':''}`;
 
   if(decided.length===0){
     list.innerHTML = `<div class="card"><div class="empty">아직 처리된 결재 내역이 없어요.</div></div>`;
@@ -2054,7 +2121,7 @@ function renderApprovalLog(main){
     list.innerHTML = `
       <div class="card">
         <table class="members">
-          <thead><tr><th>날짜</th><th>이름</th><th>팀</th><th>유형</th><th>기간</th><th>결과</th><th>처리자</th></tr></thead>
+          <thead><tr>${theadCols}</tr></thead>
           <tbody>${sorted.map(rowHTML).join('')}</tbody>
         </table>
       </div>`;
@@ -2073,23 +2140,94 @@ function renderApprovalLog(main){
       <div class="card" style="margin-bottom:14px;">
         <div class="section-title">${team} <span style="font-size:11.5px; color:var(--muted); font-weight:600;">${reqs.length}건</span></div>
         <table class="members">
-          <thead><tr><th>날짜</th><th>이름</th><th>유형</th><th>기간</th><th>결과</th><th>처리자</th></tr></thead>
-          <tbody>${reqs.map(r=>{
-            const t = LEAVE_TYPES[r.type];
-            const dateRange = r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`;
-            return `<tr>
-              <td style="font-family:var(--mono); font-size:12px; color:var(--muted);">${new Date(r.createdAt).toISOString().slice(0,10)}</td>
-              <td><strong>${empName(r.employeeId)}</strong></td>
-              <td><span style="background:${t.soft}; color:${t.color}; padding:2px 8px; border-radius:10px; font-size:11.5px; font-weight:700;">${t.label}</span></td>
-              <td style="font-family:var(--mono); font-size:12px;">${dateRange}</td>
-              <td style="font-size:12.5px; font-weight:700;">${decisionStatusText(r)}</td>
-              <td style="font-size:12.5px; color:var(--ink-soft);">${approverDisplayText(r)}</td>
-            </tr>`;
-          }).join('')}</tbody>
+          <thead><tr>${theadCols.replace('<th>팀</th>','')}</tr></thead>
+          <tbody>${reqs.map(rowHTML).join('')}</tbody>
         </table>
       </div>`;
     }).join('');
   }
+
+  if(canDelete){
+    document.querySelectorAll('[data-log-delete]').forEach(btn=>{
+      btn.onclick = ()=> showDeleteLogModal(btn.dataset.logDelete, ()=> renderApprovalLog(main));
+    });
+  }
+}
+
+function showDeleteLogModal(reqId, onDone){
+  const old = document.getElementById('delete-log-modal');
+  if(old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'delete-log-modal';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-stamp">🗑</div>
+      <div class="modal-title">삭제 내역을 저장하시겠습니까?</div>
+      <div class="modal-msg">이 신청 건을 목록에서 완전히 삭제해요. 삭제 사실은 시스템 관리자 전용 "삭제내역" 메뉴에 항상 남아요.<br>여기서는 상세 내용을 이력에 저장할지만 선택하시면 돼요.</div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button class="btn btn-primary" id="del-save-yes">저장</button>
+        <button class="btn btn-ghost" id="del-save-no">저장 안 함</button>
+        <button class="btn btn-ghost" id="del-cancel" style="color:var(--muted);">취소</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = ()=> overlay.remove();
+  document.getElementById('del-cancel').onclick = close;
+  overlay.onclick = (e)=>{ if(e.target===overlay) close(); };
+  document.getElementById('del-save-yes').onclick = async ()=>{ await performDeleteWithLog(reqId, true); close(); onDone(); };
+  document.getElementById('del-save-no').onclick = async ()=>{ await performDeleteWithLog(reqId, false); close(); onDone(); };
+}
+
+async function performDeleteWithLog(reqId, saved){
+  const r = state.data.requests.find(x=>x.id===reqId);
+  if(!r) return;
+  if(!state.data.deletionLog) state.data.deletionLog = [];
+  state.data.deletionLog.push({
+    id: uid('del'),
+    originalRequest: JSON.parse(JSON.stringify(r)),
+    deletedBy: state.me.id,
+    deletedAt: Date.now(),
+    saved: !!saved
+  });
+  state.data.requests = state.data.requests.filter(x=>x.id!==reqId);
+  await saveData();
+  showToast(saved? '삭제했고, 이력을 저장했어요.' : '삭제했어요. (이력은 삭제내역에만 남아요)');
+}
+
+/* ---------------- DELETION LOG (시스템관리자 전용) ---------------- */
+function renderDeletionLog(main){
+  const log = (state.data.deletionLog||[]).slice().sort((a,b)=>b.deletedAt-a.deletedAt);
+  main.innerHTML = `
+    <div class="page-head">
+      <div class="page-eyebrow">Deletion Log</div>
+      <h1 class="page-title">삭제내역</h1>
+      <p class="page-desc">결재내역에서 삭제된 신청 건의 기록이에요. 시스템 관리자만 볼 수 있어요.</p>
+    </div>
+    <div class="card">
+      ${log.length===0? `<div class="empty">삭제된 내역이 없어요.</div>` : `
+      <table class="members">
+        <thead><tr><th>삭제일시</th><th>이름</th><th>유형</th><th>기간</th><th>원래 상태</th><th>삭제한 사람</th><th>저장 여부</th></tr></thead>
+        <tbody>
+          ${log.map(l=>{
+            const r = l.originalRequest;
+            const t = LEAVE_TYPES[r.type];
+            const dateRange = r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`;
+            return `<tr>
+              <td style="font-family:var(--mono); font-size:12px; color:var(--muted);">${new Date(l.deletedAt).toLocaleString('ko-KR')}</td>
+              <td><strong>${empName(r.employeeId)}</strong></td>
+              <td><span style="background:${t.soft}; color:${t.color}; padding:2px 8px; border-radius:10px; font-size:11.5px; font-weight:700;">${t.label}</span></td>
+              <td style="font-family:var(--mono); font-size:12px;">${dateRange}</td>
+              <td style="font-size:12.5px;">${decisionStatusText(r)}</td>
+              <td style="font-size:12.5px; color:var(--ink-soft);">${empName(l.deletedBy)}</td>
+              <td style="font-size:12.5px; font-weight:700; color:${l.saved?'var(--green)':'var(--muted)'};">${l.saved? '저장됨':'저장 안 함'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      `}
+    </div>
+  `;
 }
 
 /* ---------------- APPROVALS ---------------- */
