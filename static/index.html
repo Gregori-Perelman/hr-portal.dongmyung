@@ -1308,7 +1308,7 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel)
     ${showActions && (r.status==='pending'||r.status==='pending_hr') ? `
       <button class="btn btn-sm btn-danger" data-cancel="${r.id}" style="margin-left:8px;">신청 취소</button>
     `:''}
-    ${showActions && r.employeeId===state.me.id && state.me.canSelfCancelApproved ? `
+    ${showActions && r.employeeId===state.me.id && (state.me.canSelfCancelApproved || LEAVE_TYPES[r.type].noApproval) ? `
       <button class="btn btn-sm btn-ghost" data-edit-req="${r.id}" style="width:auto; margin-left:8px;">수정</button>
       <button class="btn btn-sm btn-danger" data-delete-req="${r.id}" style="margin-left:8px;">삭제</button>
     `:''}
@@ -1322,7 +1322,13 @@ function escapeHTML(s){ const d=document.createElement('div'); d.textContent=s; 
 /* ---------------- REQUEST FORM ---------------- */
 function renderRequestForm(main){
   const isOwnerRestricted = String(state.me.empNo).padStart(2,'0')==='09';
-  const allowedTypes = isOwnerRestricted ? ['busytrip','etc'] : Object.keys(LEAVE_TYPES);
+  const isSelfEditingNoApprovalType = state.editingRequestId && (()=>{
+    const editingReqCheck = state.data.requests.find(r=>r.id===state.editingRequestId);
+    return editingReqCheck && LEAVE_TYPES[editingReqCheck.type].noApproval && !state.me.canSelfCancelApproved;
+  })();
+  const allowedTypes = isOwnerRestricted ? ['busytrip','etc']
+    : isSelfEditingNoApprovalType ? Object.keys(LEAVE_TYPES).filter(k=>LEAVE_TYPES[k].noApproval)
+    : Object.keys(LEAVE_TYPES);
   if(!allowedTypes.includes(state.formType)) state.formType = allowedTypes[0];
   main.innerHTML = `
     <div class="page-head">
@@ -1391,6 +1397,13 @@ function renderRequestForm(main){
     if(String(state.me.empNo).padStart(2,'0')==='09' && !['busytrip','etc'].includes(type)){
       showToast('출장 또는 기타만 신청할 수 있어요.');
       return;
+    }
+    if(state.editingRequestId){
+      const origReq = state.data.requests.find(r=>r.id===state.editingRequestId);
+      if(origReq && LEAVE_TYPES[origReq.type].noApproval && !state.me.canSelfCancelApproved && !LEAVE_TYPES[type].noApproval){
+        showToast('출장/기타 유형으로만 수정할 수 있어요.');
+        return;
+      }
     }
     const t = LEAVE_TYPES[type];
     const targetEmp = (state.me.canCancelApproved && state.formTargetEmployeeId) ? (empById(state.formTargetEmployeeId)||state.me) : state.me;
@@ -1746,7 +1759,7 @@ function renderMyRequests(main){
   document.querySelectorAll('[data-delete-req]').forEach(btn=>{
     btn.onclick = async ()=>{
       const r = state.data.requests.find(x=>x.id===btn.dataset.deleteReq);
-      if(!r || r.employeeId!==state.me.id || !state.me.canSelfCancelApproved) return;
+      if(!r || r.employeeId!==state.me.id || !(state.me.canSelfCancelApproved || LEAVE_TYPES[r.type].noApproval)) return;
       if(!confirm('이 신청을 완전히 삭제할까요? 되돌릴 수 없어요.')) return;
       state.data.requests = state.data.requests.filter(x=>x.id!==r.id);
       await saveData();
@@ -1757,7 +1770,7 @@ function renderMyRequests(main){
   document.querySelectorAll('[data-edit-req]').forEach(btn=>{
     btn.onclick = ()=>{
       const r = state.data.requests.find(x=>x.id===btn.dataset.editReq);
-      if(!r || r.employeeId!==state.me.id || !state.me.canSelfCancelApproved) return;
+      if(!r || r.employeeId!==state.me.id || !(state.me.canSelfCancelApproved || LEAVE_TYPES[r.type].noApproval)) return;
       state.editingRequestId = r.id;
       state.formType = r.type;
       if(r.type==='etc') state.formEtcSub = r.subType || 'edu';
