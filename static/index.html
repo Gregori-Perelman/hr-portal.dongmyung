@@ -757,7 +757,7 @@ function showToast(msg){
   clearTimeout(window._toastTimer);
   window._toastTimer=setTimeout(()=>t.classList.remove('show'), 2200);
 }
-function showLimitModal(msgHTML){
+function showLimitModal(msgHTML, title){
   const old = document.getElementById('limit-modal');
   if(old) old.remove();
   const overlay = document.createElement('div');
@@ -766,7 +766,7 @@ function showLimitModal(msgHTML){
   overlay.innerHTML = `
     <div class="modal-box">
       <div class="modal-stamp">✕</div>
-      <div class="modal-title">신청할 수 없어요</div>
+      <div class="modal-title">${title || '신청할 수 없어요'}</div>
       <div class="modal-msg">${msgHTML}</div>
       <button class="btn btn-primary" id="limit-modal-close">확인</button>
     </div>`;
@@ -2516,9 +2516,19 @@ function renderMembers(main){
       <div class="section-title">🗄️ 전체 데이터 백업</div>
       <p class="hint" style="margin-bottom:14px;">
         구성원, 신청내역, 공휴일 등 <strong>지금 저장된 모든 데이터를 파일 하나로 다운로드</strong>해요. 만약을 대비해 가끔(예: 매달 한 번) 받아서 안전한 곳에 보관해두시는 걸 추천드려요.
-        혹시 문제가 생기면 이 파일을 저한테 보내주시면 그 시점 데이터로 복구를 도와드릴 수 있어요.
       </p>
       <button class="btn btn-primary btn-sm" id="download-full-backup" style="width:auto;">⬇ 전체 데이터 백업 다운로드</button>
+      ${state.me.isAdmin ? `
+      <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--line);">
+        <div style="font-weight:800; font-size:13.5px; margin-bottom:6px; color:var(--stamp-red);">⚠️ 백업 파일로 복구</div>
+        <p class="hint" style="margin-bottom:12px;">
+          위에서 받아둔 .json 백업 파일을 올리면, <strong>지금의 모든 데이터를 그 파일 시점으로 완전히 덮어써요.</strong>
+          그 사이에 생긴 신규 신청·변경사항은 전부 사라져요. 정말 필요할 때만 사용하세요.
+        </p>
+        <input type="file" id="restore-backup-input" accept=".json">
+        <div class="hint" id="restore-result" style="margin-top:10px;"></div>
+      </div>
+      `:''}
     </div>
     `:''}
     ${state.me.canUploadRoster ? `
@@ -2757,6 +2767,44 @@ function renderMembers(main){
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       showToast('백업 파일을 다운로드했어요.');
+    };
+  }
+  const restoreInput = document.getElementById('restore-backup-input');
+  if(restoreInput){
+    restoreInput.onchange = async ()=>{
+      const file = restoreInput.files[0];
+      if(!file) return;
+      const resultBox = document.getElementById('restore-result');
+      try{
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const backupData = parsed.data || parsed; // .data로 감싸진 백업 형식, 또는 데이터 자체
+        if(!backupData || !Array.isArray(backupData.employees) || !Array.isArray(backupData.requests)){
+          resultBox.innerHTML = `<span style="color:var(--stamp-red);">올바른 백업 파일이 아니에요. (구성원/신청내역 목록을 찾을 수 없어요)</span>`;
+          return;
+        }
+        const empCount = backupData.employees.length;
+        const reqCount = backupData.requests.length;
+        const exportedAt = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString('ko-KR') : '알 수 없음';
+        showLimitModal(`
+          생성 시각: ${exportedAt}<br>
+          구성원 ${empCount}명 · 신청내역 ${reqCount}건<br><br>
+          <strong style="color:var(--stamp-red);">지금의 모든 데이터를 이걸로 완전히 덮어써요. 되돌릴 수 없어요.</strong><br><br>
+          <button class="btn btn-danger btn-sm" id="confirm-restore-btn" style="width:100%; margin-top:8px;">복구 실행</button>
+        `, '이 백업으로 복구하시겠습니까?');
+        document.getElementById('confirm-restore-btn').onclick = async ()=>{
+          state.data = backupData;
+          await saveData();
+          document.getElementById('limit-modal').remove();
+          showToast('백업 데이터로 복구했어요.');
+          const updatedMe = state.data.employees.find(e=>e.id===state.me.id);
+          if(updatedMe) state.me = updatedMe;
+          renderMembers(main);
+        };
+      }catch(err){
+        console.error(err);
+        resultBox.innerHTML = `<span style="color:var(--stamp-red);">파일을 읽는 중 오류가 발생했어요. JSON 파일이 맞는지 확인해주세요.</span>`;
+      }
     };
   }
 
