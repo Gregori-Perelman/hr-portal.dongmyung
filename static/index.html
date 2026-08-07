@@ -179,8 +179,8 @@
     border-style:dashed; color:var(--amber); border-color:var(--amber);
   }
   .stamp.pending::after{ border-style:dashed; border-color:var(--amber);}
-  .stamp.info{ border-color:#3B7B7B; color:#3B7B7B; }
-  .stamp.info::after{ border-color:#3B7B7B; }
+  .stamp.info{ border-color:#1C8FC7; color:#1C8FC7; }
+  .stamp.info::after{ border-color:#1C8FC7; }
 
   .empty{
     text-align:center; padding:44px 20px; color:var(--muted); font-size:13.5px;
@@ -394,8 +394,8 @@ const LEAVE_TYPES = {
   sick:     { label:'병가',      icon:'🩹', deduct:false, color:'#B23B30', soft:'#B23B3018', range:true  },
   family:   { label:'경조휴가',  icon:'🎗️', deduct:false, color:'#C4901F', soft:'#C4901F18', range:false },
   overtime: { label:'연장근무',  icon:'⏰', deduct:false, color:'#5C4A8A', soft:'#5C4A8A18', range:false },
-  busytrip: { label:'출장',      icon:'✈️', deduct:false, color:'#3B7B7B', soft:'#3B7B7B18', range:true, noApproval:true },
-  etc:      { label:'기타',      icon:'📌', deduct:false, color:'#8A93A6', soft:'#8A93A618', range:true, noApproval:true },
+  busytrip: { label:'출장',      icon:'✈️', deduct:false, color:'#1C8FC7', soft:'#1C8FC718', range:true, noApproval:true },
+  etc:      { label:'기타',      icon:'📌', deduct:false, color:'#C2570A', soft:'#C2570A18', range:true, noApproval:true },
 };
 const FAMILY_SUBTYPES = {
   parent:              { label:'부모상/처가부모상', days:5 },
@@ -1294,7 +1294,7 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel)
       ${r.type==='overtime' && r.status==='approved' ? `<div class="req-reason">1차 승인: ${empName(r.teamApproverId)} · 최종 승인: ${empName(r.hrApproverId)}</div>`:''}
       ${r.type==='overtime' && r.status==='pending_hr' && r.teamApproverId ? `<div class="req-reason">1차 승인: ${empName(r.teamApproverId)}</div>`:''}
       ${r.autoApproved? `<div class="req-reason" style="color:var(--green);">⚡ 자동승인 — 기안자가 팀장/지점장/부사장이라 별도 결재 없이 처리됨</div>`:''}
-      ${r.noApprovalNeeded? `<div class="req-reason" style="color:#3B7B7B;">${t.icon} ${t.label}은(는) 결재 없이 신청 즉시 등록돼요</div>`:''}
+      ${r.noApprovalNeeded? `<div class="req-reason" style="color:#1C8FC7;">${t.icon} ${t.label}은(는) 결재 없이 신청 즉시 등록돼요</div>`:''}
       ${r.bulkImported? `<div class="req-reason" style="color:var(--muted);">📥 엑셀로 일괄 반영된 기록이에요 (사후신청 아님)</div>`:''}
       ${r.filedBy? `<div class="req-reason" style="color:var(--muted);">✍️ ${empName(r.filedBy)}님이 대리로 기안했어요</div>`:''}
       ${note? `<div class="req-reason" style="color:var(--amber);">${note}</div>`:''}
