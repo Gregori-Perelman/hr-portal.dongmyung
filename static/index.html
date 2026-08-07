@@ -727,6 +727,12 @@ function daysToHours(days){ return trimNum(days*8); }
 function fmtDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function parseDate(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
 function isWeekend(d){ const day=d.getDay(); return day===0||day===6; }
+const LUNCH_START = 12, LUNCH_END = 13; // 점심시간(정시 기준) — 분할반차 시간에 포함되면 1시간 자동 차감
+function computeSplitWorkHours(start, end){
+  let hours = end - start;
+  if(hours > 0 && start <= LUNCH_START && end >= LUNCH_END) hours -= 1; // 구간이 점심시간을 온전히 포함하면 1시간 빼기
+  return hours;
+}
 function isHoliday(dateStr){
   return !!(state.data.holidays && state.data.holidays.some(h=>h.date===dateStr));
 }
@@ -1265,7 +1271,7 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel)
   const t = LEAVE_TYPES[r.type];
   const dateLabel = r.type==='half'
     ? (r.halfType==='split'
-        ? `${r.startDate} · ${String(r.splitStart).padStart(2,'0')}:00~${String(r.splitEnd).padStart(2,'0')}:00 분할반차 (${r.splitEnd-r.splitStart}시간)`
+        ? `${r.startDate} · ${String(r.splitStart).padStart(2,'0')}:00~${String(r.splitEnd).padStart(2,'0')}:00 분할반차 (${daysToHours(r.days)}시간${(r.splitStart<=LUNCH_START && r.splitEnd>=LUNCH_END)?', 점심시간 제외':''})`
         : `${r.startDate} · ${r.halfType==='am'?'오전':'오후'} 반차`)
     : r.type==='overtime'
     ? `${r.startDate} · ${r.otStart}~${r.otEnd} (${formatMinutes(r.otMinutes)})`
@@ -1415,7 +1421,7 @@ function renderRequestForm(main){
         splitStart = parseInt(document.getElementById('split-start').value, 10);
         splitEnd = parseInt(document.getElementById('split-end').value, 10);
         if(splitEnd <= splitStart){ showToast('종료 시간은 시작 시간보다 늦어야 해요.'); return; }
-        const hours = splitEnd - splitStart;
+        const hours = computeSplitWorkHours(splitStart, splitEnd);
         days = Math.round((hours/8)*1000)/1000;
       }else{
         days = 0.5;
@@ -1588,12 +1594,13 @@ function renderDateFields(){
         state.splitStart = parseInt(startSel.value,10);
         state.splitEnd = parseInt(endSel.value,10);
         const hint = document.getElementById('split-hours-hint');
-        const hours = state.splitEnd - state.splitStart;
+        const hours = computeSplitWorkHours(state.splitStart, state.splitEnd);
         if(hours <= 0){
           hint.innerHTML = `<span style="color:var(--stamp-red);">종료 시간은 시작 시간보다 늦어야 해요.</span>`;
         }else{
           const dayVal = Math.round((hours/8)*1000)/1000;
-          hint.innerHTML = `총 <strong>${hours}시간</strong> (연차 ${dayVal}일 차감 · 1일=8시간 기준) · 정시 단위로만 입력돼요. 현재 잔여 연차 <strong>${remain}일 (${remainHours}시간)</strong>`;
+          const lunchNote = (state.splitStart <= LUNCH_START && state.splitEnd >= LUNCH_END) ? ' · 점심시간(12~13시) 1시간은 자동으로 빠졌어요' : '';
+          hint.innerHTML = `총 <strong>${hours}시간</strong> (연차 ${dayVal}일 차감 · 1일=8시간 기준)${lunchNote} · 정시 단위로만 입력돼요. 현재 잔여 연차 <strong>${remain}일 (${remainHours}시간)</strong>`;
         }
       };
       startSel.onchange = updateHint;
