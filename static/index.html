@@ -458,7 +458,7 @@ const SEED_EMPLOYEES = [
   { empNo:'33', name:'신상무',    team:'서울지점',    position:'지점장', annualTotal:19 },
   { empNo:'10', name:'정나은',    team:'영업지원팀',  position:'팀장',  annualTotal:25, isHrApprover:true, isAdmin:true, canUploadRoster:true, canCancelApproved:true, canViewDetailLog:true },
   { empNo:'54', name:'구현',      team:'물류팀',      position:'팀장',  annualTotal:18 },
-  { empNo:'05',  name:'김남홍',    team:'영업지원팀',  position:'팀원',  annualTotal:25, isFullViewer:true, canUploadRoster:true, canViewDetailLog:true },
+  { empNo:'05',  name:'김남홍',    team:'영업지원팀',  position:'팀원',  annualTotal:25, isFullViewer:true, canUploadRoster:true, canViewDetailLog:true, canBackupData:true, isAdmin:true },
   { empNo:'13', name:'김성준YB',  team:'본사영업부',  position:'팀장',  annualTotal:24 },
   { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true, canUploadRoster:true, canCancelApproved:true, canViewDetailLog:true },
   { empNo:'26', name:'정태건',    team:'FA시스템팀',  position:'팀장',  annualTotal:18 },
@@ -788,6 +788,7 @@ function buildSeedEmployees(){
     canCancelApproved: !!s.canCancelApproved,
     canViewDetailLog: !!s.canViewDetailLog,
     canSelfCancelApproved: !!s.canSelfCancelApproved,
+    canBackupData: !!s.canBackupData,
     annualTotal: s.annualTotal, baseUsed: 0,
   }));
 }
@@ -921,6 +922,20 @@ async function loadData(){
       state.data.grantedOwnerSelfCancelV1 = true;
       await saveData();
     }
+    if(!state.data.grantedNamHongBackupV1){
+      // 김남홍에게 전체 데이터 백업 다운로드 권한 부여
+      const nh = state.data.employees.find(e=>String(e.empNo).padStart(2,'0')==='05');
+      if(nh){ nh.canBackupData = true; }
+      state.data.grantedNamHongBackupV1 = true;
+      await saveData();
+    }
+    if(!state.data.grantedNamHongAdminV1){
+      // 김남홍을 시스템 관리자로 승격
+      const nh = state.data.employees.find(e=>String(e.empNo).padStart(2,'0')==='05');
+      if(nh){ nh.isAdmin = true; }
+      state.data.grantedNamHongAdminV1 = true;
+      await saveData();
+    }
     if(!state.data.deletionLog){
       state.data.deletionLog = [];
       await saveData();
@@ -941,7 +956,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true, grantedNamHongBackupV1: true, grantedNamHongAdminV1: true };
     await saveData();
   }
 }
@@ -2496,6 +2511,16 @@ function renderMembers(main){
       <h1 class="page-title">구성원 관리</h1>
       <p class="page-desc">승인자 권한과 연간 연차 일수를 설정하세요. 구성원 등록은 관리자만 할 수 있어요.</p>
     </div>
+    ${(state.me.isAdmin || state.me.canBackupData) ? `
+    <div class="card" style="margin-bottom:20px; border-color:var(--brand);">
+      <div class="section-title">🗄️ 전체 데이터 백업</div>
+      <p class="hint" style="margin-bottom:14px;">
+        구성원, 신청내역, 공휴일 등 <strong>지금 저장된 모든 데이터를 파일 하나로 다운로드</strong>해요. 만약을 대비해 가끔(예: 매달 한 번) 받아서 안전한 곳에 보관해두시는 걸 추천드려요.
+        혹시 문제가 생기면 이 파일을 저한테 보내주시면 그 시점 데이터로 복구를 도와드릴 수 있어요.
+      </p>
+      <button class="btn btn-primary btn-sm" id="download-full-backup" style="width:auto;">⬇ 전체 데이터 백업 다운로드</button>
+    </div>
+    `:''}
     ${state.me.canUploadRoster ? `
     <div class="card" style="margin-bottom:20px;">
       <div class="section-title">엑셀로 조직도 일괄 업로드</div>
@@ -2593,6 +2618,7 @@ function renderMembers(main){
         <button class="toggle-btn ${e.isHrApprover?'on':''}" data-toggle-hr="${e.id}" style="margin-top:4px;">연장근무 최종승인</button>
         <button class="toggle-btn ${e.isFullViewer?'on':''}" data-toggle-fullview="${e.id}" style="margin-top:4px;">연차/연장근무 전체열람</button>
         <button class="toggle-btn ${e.canCancelApproved?'on':''}" data-toggle-cancel="${e.id}" style="margin-top:4px;">승인취소 권한</button>
+        <button class="toggle-btn ${e.canBackupData?'on':''}" data-toggle-backup="${e.id}" style="margin-top:4px;">데이터 백업 권한</button>
         <button class="toggle-btn ${e.isAdmin?'on':''}" data-toggle-admin="${e.id}" style="margin-top:4px;">시스템 관리자</button>
       </td>
       <td><input type="text" inputmode="decimal" class="balance-input" data-balance="${e.id}" value="${e.annualTotal}"></td>
@@ -2637,6 +2663,15 @@ function renderMembers(main){
       e.canCancelApproved = !e.canCancelApproved;
       await saveData();
       showToast(e.canCancelApproved? `${e.name}님에게 승인취소 권한을 부여했어요.` : `${e.name}님의 승인취소 권한을 해제했어요.`);
+      renderMembers(main);
+    };
+  });
+  document.querySelectorAll('[data-toggle-backup]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const e = empById(btn.dataset.toggleBackup);
+      e.canBackupData = !e.canBackupData;
+      await saveData();
+      showToast(e.canBackupData? `${e.name}님에게 데이터 백업 권한을 부여했어요.` : `${e.name}님의 데이터 백업 권한을 해제했어요.`);
       renderMembers(main);
     };
   });
@@ -2702,6 +2737,28 @@ function renderMembers(main){
     };
   });
   } // end if(body)
+
+  const backupBtn = document.getElementById('download-full-backup');
+  if(backupBtn){
+    backupBtn.onclick = ()=>{
+      const backup = {
+        exportedAt: new Date().toISOString(),
+        exportedBy: state.me.name,
+        data: state.data
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = todayStr();
+      a.href = url;
+      a.download = `hr-portal-backup_${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('백업 파일을 다운로드했어요.');
+    };
+  }
 
   const templateBtn = document.getElementById('download-roster-template');
   if(templateBtn){
