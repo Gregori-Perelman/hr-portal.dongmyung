@@ -2112,6 +2112,8 @@ function approvalLogComparator(a, b){
   let result;
   if(state.approvalLogSortCol==='name'){
     result = empName(a.employeeId).localeCompare(empName(b.employeeId), 'ko');
+  }else if(state.approvalLogSortCol==='period'){
+    result = a.startDate.localeCompare(b.startDate);
   }else{
     result = a.createdAt - b.createdAt;
   }
@@ -2127,7 +2129,7 @@ function renderApprovalLog(main){
       <div>
         <div class="page-eyebrow">Approval Log</div>
         <h1 class="page-title">결재내역</h1>
-        <p class="page-desc">회사 전체의 결재 처리 이력이에요. 다른 팀장·부서장이 처리한 건도 모두 볼 수 있어요. "날짜"/"이름"을 클릭하면 그 기준으로 정렬돼요 (다시 누르면 반대 순서). (시스템 관리자 전용)</p>
+        <p class="page-desc">회사 전체의 결재 처리 이력이에요. 다른 팀장·부서장이 처리한 건도 모두 볼 수 있어요. "기안일"/"이름"/"기간"을 클릭하면 그 기준으로 정렬돼요 (다시 누르면 반대 순서). (시스템 관리자 전용)</p>
       </div>
       <div style="display:flex; gap:8px;">
         <button class="btn btn-sm ${state.approvalLogSort==='time'?'btn-primary':'btn-ghost'}" id="sort-time" style="width:auto;">시계열순</button>
@@ -2157,7 +2159,7 @@ function renderApprovalLog(main){
     </tr>`;
   };
   const sortArrow = (col)=> state.approvalLogSortCol===col ? (state.approvalLogSortDir==='asc'?' ▲':' ▼') : '';
-  const theadCols = `<th data-sort-col="date" style="cursor:pointer;">날짜${sortArrow('date')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrow('name')}</th><th>팀</th><th>유형</th><th>기간</th><th>결과</th><th>처리자</th>${canDelete? '<th></th>':''}`;
+  const theadCols = `<th data-sort-col="date" style="cursor:pointer;">기안일${sortArrow('date')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrow('name')}</th><th>팀</th><th>유형</th><th data-sort-col="period" style="cursor:pointer;">기간${sortArrow('period')}</th><th>결과</th><th>처리자</th>${canDelete? '<th></th>':''}`;
 
   if(decided.length===0){
     list.innerHTML = `<div class="card"><div class="empty">아직 처리된 결재 내역이 없어요.</div></div>`;
