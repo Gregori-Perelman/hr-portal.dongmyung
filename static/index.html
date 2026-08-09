@@ -2108,15 +2108,26 @@ function decisionStatusText(r){
   if(r.status==='cancelled') return '취소됨';
   return r.status;
 }
+function approvalLogComparator(a, b){
+  let result;
+  if(state.approvalLogSortCol==='name'){
+    result = empName(a.employeeId).localeCompare(empName(b.employeeId), 'ko');
+  }else{
+    result = a.createdAt - b.createdAt;
+  }
+  return state.approvalLogSortDir==='asc' ? result : -result;
+}
 function renderApprovalLog(main){
   const decided = state.data.requests.filter(r=>r.status==='approved'||r.status==='rejected'||r.status==='cancelled');
   const canDelete = !!state.me.isAdmin;
+  if(!state.approvalLogSortCol) state.approvalLogSortCol = 'date';
+  if(!state.approvalLogSortDir) state.approvalLogSortDir = 'desc';
   main.innerHTML = `
     <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
       <div>
         <div class="page-eyebrow">Approval Log</div>
         <h1 class="page-title">결재내역</h1>
-        <p class="page-desc">회사 전체의 결재 처리 이력이에요. 다른 팀장·부서장이 처리한 건도 모두 볼 수 있어요. (시스템 관리자 전용)</p>
+        <p class="page-desc">회사 전체의 결재 처리 이력이에요. 다른 팀장·부서장이 처리한 건도 모두 볼 수 있어요. "날짜"/"이름"을 클릭하면 그 기준으로 정렬돼요 (다시 누르면 반대 순서). (시스템 관리자 전용)</p>
       </div>
       <div style="display:flex; gap:8px;">
         <button class="btn btn-sm ${state.approvalLogSort==='time'?'btn-primary':'btn-ghost'}" id="sort-time" style="width:auto;">시계열순</button>
@@ -2145,7 +2156,8 @@ function renderApprovalLog(main){
       ${canDelete? `<td><button class="btn btn-sm btn-danger" data-log-delete="${r.id}">삭제</button></td>`:''}
     </tr>`;
   };
-  const theadCols = `<th>날짜</th><th>이름</th><th>팀</th><th>유형</th><th>기간</th><th>결과</th><th>처리자</th>${canDelete? '<th></th>':''}`;
+  const sortArrow = (col)=> state.approvalLogSortCol===col ? (state.approvalLogSortDir==='asc'?' ▲':' ▼') : '';
+  const theadCols = `<th data-sort-col="date" style="cursor:pointer;">날짜${sortArrow('date')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrow('name')}</th><th>팀</th><th>유형</th><th>기간</th><th>결과</th><th>처리자</th>${canDelete? '<th></th>':''}`;
 
   if(decided.length===0){
     list.innerHTML = `<div class="card"><div class="empty">아직 처리된 결재 내역이 없어요.</div></div>`;
@@ -2153,7 +2165,7 @@ function renderApprovalLog(main){
   }
 
   if(state.approvalLogSort==='time'){
-    const sorted = decided.slice().sort((a,b)=>b.createdAt-a.createdAt);
+    const sorted = decided.slice().sort(approvalLogComparator);
     list.innerHTML = `
       <div class="card">
         <table class="members">
@@ -2171,7 +2183,7 @@ function renderApprovalLog(main){
     });
     const teamNames = Object.keys(byTeam).sort((a,b)=>a.localeCompare(b,'ko'));
     list.innerHTML = teamNames.map(team=>{
-      const reqs = byTeam[team].slice().sort((a,b)=>b.createdAt-a.createdAt);
+      const reqs = byTeam[team].slice().sort(approvalLogComparator);
       return `
       <div class="card" style="margin-bottom:14px;">
         <div class="section-title">${team} <span style="font-size:11.5px; color:var(--muted); font-weight:600;">${reqs.length}건</span></div>
@@ -2182,6 +2194,19 @@ function renderApprovalLog(main){
       </div>`;
     }).join('');
   }
+
+  document.querySelectorAll('[data-sort-col]').forEach(th=>{
+    th.onclick = ()=>{
+      const col = th.dataset.sortCol;
+      if(state.approvalLogSortCol===col){
+        state.approvalLogSortDir = state.approvalLogSortDir==='asc' ? 'desc' : 'asc';
+      }else{
+        state.approvalLogSortCol = col;
+        state.approvalLogSortDir = 'asc';
+      }
+      renderApprovalLog(main);
+    };
+  });
 
   if(canDelete){
     document.querySelectorAll('[data-log-delete]').forEach(btn=>{
