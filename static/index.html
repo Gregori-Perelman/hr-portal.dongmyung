@@ -449,11 +449,15 @@ const DEFAULT_HOLIDAYS_2026 = [
 ];
 
 const LEADER_POSITIONS = ['팀장', '지점장', '부사장'];
+const OWNER_TIER_EMPNOS = ['09','22','42']; // 이동원(대표이사)·박은정(상무)·이다빈(대표이사): 연차 미사용, 결재 없음, 출장/기타만 신청, 열람은 관리자급
+function isOwnerTierEmp(emp){ return emp && OWNER_TIER_EMPNOS.includes(String(emp.empNo).padStart(2,'0')); }
 const DEFAULT_PASSWORD = 'dmbrg';
 const ORG_VERSION = 3; // 조직도가 바뀌면 이 값을 올려서 자동 재시딩
 
 const SEED_EMPLOYEES = [
   { empNo:'09', name:'이동원',    team:'본사',       position:'대표이사', annualTotal:0, isAdmin:true, canUploadRoster:true, canViewDetailLog:true, canSelfCancelApproved:true },
+  { empNo:'22', name:'박은정',    team:'본사',       position:'상무',    annualTotal:0, isAdmin:true, canUploadRoster:true, canViewDetailLog:true, canSelfCancelApproved:true },
+  { empNo:'42', name:'이다빈',    team:'본사',       position:'대표이사', annualTotal:0, isAdmin:true, canUploadRoster:true, canViewDetailLog:true, canSelfCancelApproved:true },
   { empNo:'21', name:'허재관',    team:'본사',       position:'부사장', annualTotal:22 },
   { empNo:'41', name:'심대흥',    team:'본사영업부',  position:'팀원',  annualTotal:16 },
   { empNo:'33', name:'신상무',    team:'서울지점',    position:'지점장', annualTotal:19 },
@@ -937,6 +941,27 @@ async function loadData(){
       state.data.grantedNamHongAdminV1 = true;
       await saveData();
     }
+    if(!state.data.addedParkLeeOwnerTierV1){
+      // 박은정(상무, 사번22), 이다빈(대표이사, 사번42) 추가: 이동원과 동일한 오너급 권한
+      // (기안/승인은 여전히 제외, 출장/기타만 신청 가능, 열람은 관리자급)
+      const newOwners = [
+        { empNo:'22', name:'박은정', team:'본사', position:'상무' },
+        { empNo:'42', name:'이다빈', team:'본사', position:'대표이사' },
+      ];
+      newOwners.forEach(o=>{
+        if(!state.data.employees.some(e=>String(e.empNo).padStart(2,'0')===o.empNo)){
+          state.data.employees.push({
+            id: uid('emp'), empNo:o.empNo, password: DEFAULT_PASSWORD,
+            name:o.name, team:o.team, position:o.position,
+            isAdmin:true, isApprover:false, isHrApprover:false, isFullViewer:false,
+            canUploadRoster:true, canViewDetailLog:true, canSelfCancelApproved:true,
+            annualTotal:0, baseUsed:0
+          });
+        }
+      });
+      state.data.addedParkLeeOwnerTierV1 = true;
+      await saveData();
+    }
     if(!state.data.deletionLog){
       state.data.deletionLog = [];
       await saveData();
@@ -957,7 +982,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true, grantedNamHongBackupV1: true, grantedNamHongAdminV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true, grantedNamHongBackupV1: true, grantedNamHongAdminV1: true, addedParkLeeOwnerTierV1: true };
     await saveData();
   }
 }
@@ -1096,7 +1121,7 @@ function renderLogin(){
 
 /* ---------------- RENDER: APP SHELL ---------------- */
 function navItems(){
-  const isOwnerOnly = String(state.me.empNo).padStart(2,'0')==='09';
+  const isOwnerOnly = isOwnerTierEmp(state.me);
   if(isOwnerOnly){
     const ownerItems = [
       {id:'dashboard', icon:'◆', label:'대시보드'},
@@ -1343,7 +1368,7 @@ function escapeHTML(s){ const d=document.createElement('div'); d.textContent=s; 
 
 /* ---------------- REQUEST FORM ---------------- */
 function renderRequestForm(main){
-  const isOwnerRestricted = String(state.me.empNo).padStart(2,'0')==='09';
+  const isOwnerRestricted = isOwnerTierEmp(state.me);
   const isSelfEditingNoApprovalType = state.editingRequestId && (()=>{
     const editingReqCheck = state.data.requests.find(r=>r.id===state.editingRequestId);
     return editingReqCheck && LEAVE_TYPES[editingReqCheck.type].noApproval && !state.me.canSelfCancelApproved;
@@ -1416,7 +1441,7 @@ function renderRequestForm(main){
 
   document.getElementById('submit-req').onclick = async ()=>{
     const type = state.formType;
-    if(String(state.me.empNo).padStart(2,'0')==='09' && !['busytrip','etc'].includes(type)){
+    if(isOwnerTierEmp(state.me) && !['busytrip','etc'].includes(type)){
       showToast('출장 또는 기타만 신청할 수 있어요.');
       return;
     }
@@ -1514,7 +1539,7 @@ function renderRequestForm(main){
       newReq.noApprovalNeeded = true;
     }
     // 팀장/지점장/부사장 본인 기안 건은 결재 없이 자동승인 (대상자 기준, 대리 기안이어도 동일하게 적용)
-    else if(isLeaderPosition(targetEmp) || String(targetEmp.empNo).padStart(2,'0')==='09'){
+    else if(isLeaderPosition(targetEmp) || isOwnerTierEmp(targetEmp)){
       if(type==='overtime'){
         newReq.teamApproverId = targetEmp.id;
         newReq.teamApprovedAt = Date.now();
@@ -1809,7 +1834,7 @@ function renderMyRequests(main){
 /* ---------------- LEAVE STATUS ---------------- */
 function renderLeaveStatus(main){
   const visible = sortSelfFirstThenAlpha(
-    visibleEmployeesForStatus(state.me).filter(e=>String(e.empNo).padStart(2,'0')!=='09'),
+    visibleEmployeesForStatus(state.me).filter(e=>!isOwnerTierEmp(e)),
     state.me.id
   );
   const visibleIds = new Set(visible.map(e=>e.id));
@@ -1918,7 +1943,7 @@ function requestStatusText(r){
 }
 function renderLeaveStatusDetail(main){
   const visible = sortSelfFirstThenAlpha(
-    visibleEmployeesForStatus(state.me).filter(e=>String(e.empNo).padStart(2,'0')!=='09'),
+    visibleEmployeesForStatus(state.me).filter(e=>!isOwnerTierEmp(e)),
     state.me.id
   );
   main.innerHTML = `
@@ -2005,7 +2030,7 @@ function renderLeaveStatusDetail(main){
 /* ---------------- OVERTIME STATUS ---------------- */
 function renderOvertimeStatus(main){
   const visible = sortSelfFirstThenAlpha(
-    visibleEmployeesForStatus(state.me).filter(e=>String(e.empNo).padStart(2,'0')!=='09'),
+    visibleEmployeesForStatus(state.me).filter(e=>!isOwnerTierEmp(e)),
     state.me.id
   );
   const visibleIds = new Set(visible.map(e=>e.id));
@@ -2593,6 +2618,7 @@ function renderMembers(main){
             <option value="팀장">팀장</option>
             <option value="지점장">지점장</option>
             <option value="대표이사">대표이사</option>
+            <option value="상무">상무</option>
             <option value="부사장">부사장</option>
           </select>
         </div>
@@ -2649,6 +2675,7 @@ function renderMembers(main){
           <option value="팀장" ${e.position==='팀장'?'selected':''}>팀장</option>
           <option value="지점장" ${e.position==='지점장'?'selected':''}>지점장</option>
           <option value="대표이사" ${e.position==='대표이사'?'selected':''}>대표이사</option>
+          <option value="상무" ${e.position==='상무'?'selected':''}>상무</option>
           <option value="부사장" ${e.position==='부사장'?'selected':''}>부사장</option>
         </select>
       </td>
