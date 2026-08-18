@@ -1780,6 +1780,14 @@ function renderDateFields(){
       </div>
       <div class="hint">${LEAVE_TYPES[type].deduct? `현재 잔여 연차 <strong>${remain}일 (${remainHours}시간)</strong> · 주말·공휴일을 제외한 영업일 기준으로 차감돼요 (1일=8시간).` : (LEAVE_TYPES[type].noApproval? '이 유형은 연차 차감도 없고, 결재 없이 신청 즉시 바로 등록돼요.' : '이 유형은 연차에서 차감되지 않아요.')} 오늘 기준 최대 10일 전까지 사후 신청 가능해요.</div>`;
   }
+
+  // 시작일을 고르면 종료일도 일단 같은 날짜로 맞춰준다 (하루짜리 신청이 많아서).
+  // 어디까지나 기본값 제안일 뿐, 여러 날에 걸친 신청이면 종료일을 따로 바꾸면 돼요.
+  const startDateEl = document.getElementById('start-date');
+  const endDateEl = document.getElementById('end-date');
+  if(startDateEl && endDateEl){
+    startDateEl.onchange = ()=>{ endDateEl.value = startDateEl.value; };
+  }
 }
 
 /* ---------------- MY REQUESTS ---------------- */
