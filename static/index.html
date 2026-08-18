@@ -2069,7 +2069,7 @@ function renderOvertimeStatus(main){
     <div class="card" style="margin-bottom:20px; border-color:var(--brand);">
       <div class="section-title">📥 연장근무 엑셀 일괄 업로드</div>
       <p class="hint" style="margin-bottom:14px;">
-        엑셀 열 구성: <strong>사번, 날짜, 시작시간, 종료시간, 사유</strong> (첫 행은 제목행. 시간은 HH:MM 형식, 예: 18:00). 업로드된 건은
+        엑셀 열 구성: <strong>사번, 날짜, 시작시간, 종료시간, 사유</strong> (첫 행은 제목행. 시간은 HH:MM 형식, <strong>30분 단위만 가능</strong>해요 — 예: 18:00, 18:30. 그 외 분 단위는 건너뛰어요). 업로드된 건은
         <strong>결재 없이 바로 승인 완료</strong>로 등록돼요. 여러 명·여러 건을 한 번에 올릴 때 쓰세요.
       </p>
       <button class="btn btn-ghost btn-sm" id="download-overtime-template" style="width:auto; margin-bottom:14px;">⬇ 엑셀 업로드 양식 다운로드</button>
@@ -2193,6 +2193,7 @@ function renderOvertimeStatus(main){
           const [sh,sm] = startRaw.split(':').map(Number);
           const [eh,em] = endRaw.split(':').map(Number);
           if(isNaN(sh)||isNaN(sm)||isNaN(eh)||isNaN(em)){ skipped++; return; }
+          if((sm!==0 && sm!==30) || (em!==0 && em!==30)){ skipped++; return; } // 30분 단위(정시/30분)만 허용
           const otMinutes = (eh*60+em) - (sh*60+sm);
           if(otMinutes<=0){ skipped++; return; }
 
@@ -2208,7 +2209,7 @@ function renderOvertimeStatus(main){
         });
 
         await saveData();
-        resultBox.innerHTML = `<strong style="color:var(--green);">완료:</strong> ${added}건 반영${skipped? ` · 건너뜀 ${skipped}행(사번/날짜/시간 확인 필요)`:''}`;
+        resultBox.innerHTML = `<strong style="color:var(--green);">완료:</strong> ${added}건 반영${skipped? ` · 건너뜀 ${skipped}행(사번/날짜/시간을 확인해주세요 — 시간은 30분 단위만 가능해요)`:''}`;
         showToast('연장근무를 엑셀로 일괄 반영했어요.');
         renderOvertimeStatus(main);
       }catch(err){
