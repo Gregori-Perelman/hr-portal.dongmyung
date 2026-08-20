@@ -2192,16 +2192,27 @@ function renderOvertimeStatus(main){
       resultBox.textContent = '처리 중...';
       try{
         const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+        const wb = XLSX.read(buf, { type: 'array' }); // cellDates 안 씀: 날짜/시간 변환 버그를 피하려고 직접 숫자로 계산
         const sheet = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
 
+        // 엑셀 날짜/시간은 "숫자(일련번호)"로 저장돼요. 라이브러리가 이걸 Date 객체로 바꿔주는 과정에서
+        // 1899년 근처의 아주 오래된 날짜 때문에 시간대 계산이 미묘하게 틀어지는 버그가 있어서,
+        // 아예 Date 변환을 거치지 않고 숫자를 직접 계산해서 정확하게 뽑아낸다.
+        const excelSerialToDateStr = (serial)=>{
+          const days = Math.round(serial);
+          const ms = Date.UTC(1899,11,30) + days*86400000;
+          const d = new Date(ms);
+          return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+        };
+        const excelSerialToHM = (serial)=>{
+          const frac = serial - Math.floor(serial); // 시간만 있는 셀이든, 날짜+시간이 합쳐진 셀이든 소수점 아래(하루 중 비율)만 사용
+          const totalMin = Math.round(frac*24*60);
+          return { h: Math.floor(totalMin/60)%24, m: totalMin%60 };
+        };
         const parseTimeCell = (val)=>{
+          if(typeof val === 'number'){ return excelSerialToHM(val); }
           if(val instanceof Date){ return { h: val.getUTCHours(), m: val.getUTCMinutes() }; }
-          if(typeof val === 'number'){ // 혹시 시간이 아니라 순수 소수(하루 중 비율)로 들어온 경우
-            const totalMin = Math.round(val*24*60);
-            return { h: Math.floor(totalMin/60), m: totalMin%60 };
-          }
           const str = String(val).trim();
           const parts = str.split(':');
           if(parts.length>=2){
@@ -2226,7 +2237,9 @@ function renderOvertimeStatus(main){
           if(nameRaw && nameRaw!==emp.name){ mismatched++; return; } // 이름 참고칸을 채웠는데 사번과 실제 이름이 다르면 안전하게 건너뜀
 
           let dateStr;
-          if(dateRaw instanceof Date){
+          if(typeof dateRaw === 'number'){
+            dateStr = excelSerialToDateStr(dateRaw);
+          }else if(dateRaw instanceof Date){
             dateStr = dateRaw.getUTCFullYear()+'-'+String(dateRaw.getUTCMonth()+1).padStart(2,'0')+'-'+String(dateRaw.getUTCDate()).padStart(2,'0');
           }else{
             const parsedDate = new Date(dateRaw);
