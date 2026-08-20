@@ -2167,40 +2167,60 @@ function renderOvertimeStatus(main){
       resultBox.textContent = '처리 중...';
       try{
         const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: 'array' });
+        const wb = XLSX.read(buf, { type: 'array', cellDates: true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+        const parseTimeCell = (val)=>{
+          if(val instanceof Date){ return { h: val.getUTCHours(), m: val.getUTCMinutes() }; }
+          if(typeof val === 'number'){ // 혹시 시간이 아니라 순수 소수(하루 중 비율)로 들어온 경우
+            const totalMin = Math.round(val*24*60);
+            return { h: Math.floor(totalMin/60), m: totalMin%60 };
+          }
+          const str = String(val).trim();
+          const parts = str.split(':');
+          if(parts.length>=2){
+            const h = parseInt(parts[0],10), m = parseInt(parts[1],10);
+            if(!isNaN(h) && !isNaN(m)) return { h, m };
+          }
+          return null;
+        };
 
         let added = 0, skipped = 0;
         rows.forEach(row=>{
           const empNoRaw = String(row['사번']||'').trim();
           const dateRaw = row['날짜'];
-          const startRaw = String(row['시작시간']||'').trim();
-          const endRaw = String(row['종료시간']||'').trim();
+          const startCell = row['시작시간'];
+          const endCell = row['종료시간'];
           const reason = String(row['사유']||'').trim();
-          if(!empNoRaw || !dateRaw || !startRaw || !endRaw){ skipped++; return; }
+          if(!empNoRaw || !dateRaw || startCell==='' || endCell===''){ skipped++; return; }
           const empNo = empNoRaw.padStart(2,'0');
           const emp = state.data.employees.find(e=>String(e.empNo).padStart(2,'0')===empNo);
           if(!emp){ skipped++; return; }
 
           let dateStr;
-          if(dateRaw instanceof Date){ dateStr = fmtDate(dateRaw); }
-          else{
+          if(dateRaw instanceof Date){
+            dateStr = dateRaw.getUTCFullYear()+'-'+String(dateRaw.getUTCMonth()+1).padStart(2,'0')+'-'+String(dateRaw.getUTCDate()).padStart(2,'0');
+          }else{
             const parsedDate = new Date(dateRaw);
             if(isNaN(parsedDate)){ skipped++; return; }
             dateStr = fmtDate(parsedDate);
           }
-          const [sh,sm] = startRaw.split(':').map(Number);
-          const [eh,em] = endRaw.split(':').map(Number);
-          if(isNaN(sh)||isNaN(sm)||isNaN(eh)||isNaN(em)){ skipped++; return; }
+          const startT = parseTimeCell(startCell);
+          const endT = parseTimeCell(endCell);
+          if(!startT || !endT){ skipped++; return; }
+          const { h:sh, m:sm } = startT;
+          const { h:eh, m:em } = endT;
           if((sm!==0 && sm!==30) || (em!==0 && em!==30)){ skipped++; return; } // 30분 단위(정시/30분)만 허용
           const otMinutes = (eh*60+em) - (sh*60+sm);
           if(otMinutes<=0){ skipped++; return; }
+          const otStart = `${String(sh).padStart(2,'0')}:${String(sm).padStart(2,'0')}`;
+          const otEnd = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`;
 
           state.data.requests.push({
             id: uid('req'), employeeId: emp.id, type:'overtime',
             startDate: dateStr, endDate: dateStr,
-            otStart: startRaw, otEnd: endRaw, otMinutes,
+            otStart, otEnd, otMinutes,
             days: 0, reason, status:'approved',
             teamApproverId: state.me.id, hrApproverId: state.me.id, approverId: state.me.id,
             createdAt: Date.now(), isBackdated:true, bulkImported:true
@@ -2993,7 +3013,7 @@ function renderMembers(main){
       resultBox.textContent = '처리 중...';
       try{
         const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: 'array' });
+        const wb = XLSX.read(buf, { type: 'array', cellDates: true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
