@@ -999,7 +999,8 @@ async function loadData(){
 async function saveData(){
   try{
     await window.storage.set(SHARED_KEY, JSON.stringify(state.data), true);
-  }catch(e){ console.error('save failed', e); showToast('저장에 실패했어요. 다시 시도해주세요.'); }
+    return true;
+  }catch(e){ console.error('save failed', e); showToast('저장에 실패했어요. 다시 시도해주세요.'); return false; }
 }
 async function loadIdentity(){
   try{
@@ -2228,7 +2229,11 @@ function renderOvertimeStatus(main){
           added++;
         });
 
-        await saveData();
+        const saved = await saveData();
+        if(!saved){
+          resultBox.innerHTML = `<span style="color:var(--stamp-red);">저장에 실패했어요. 인터넷 연결을 확인하고 다시 시도해주세요. (반영되지 않았어요)</span>`;
+          return;
+        }
         resultBox.innerHTML = `<strong style="color:var(--green);">완료:</strong> ${added}건 반영${skipped? ` · 건너뜀 ${skipped}행(사번/날짜/시간을 확인해주세요 — 시간은 30분 단위만 가능해요)`:''}`;
         showToast('연장근무를 엑셀로 일괄 반영했어요.');
         renderOvertimeStatus(main);
@@ -3052,7 +3057,11 @@ function renderMembers(main){
           }
         });
 
-        await saveData();
+        const saved = await saveData();
+        if(!saved){
+          resultBox.innerHTML = `<span style="color:var(--stamp-red);">저장에 실패했어요. 인터넷 연결을 확인하고 다시 시도해주세요. (반영되지 않았어요)</span>`;
+          return;
+        }
         resultBox.innerHTML = `<strong style="color:var(--green);">완료:</strong> 갱신 ${updated}명 · 신규 추가 ${added}명${skipped? ` · 건너뜀 ${skipped}행(사번/이름 누락)`:''}`;
         showToast('구성원 정보를 엑셀로 일괄 반영했어요.');
         renderMembers(main);
