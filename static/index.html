@@ -2264,20 +2264,26 @@ function renderOvertimeStatus(main){
         const saved = await saveData();
         if(!saved){
           resultBox.innerHTML = `<span style="color:var(--stamp-red);">저장에 실패했어요. 인터넷 연결을 확인하고 다시 시도해주세요. (반영되지 않았어요)</span>`;
+          alert('디버그: 저장 실패. 총 행: ' + rows.length + ', added=' + added + ', skipped=' + skipped + ', duplicated=' + duplicated + ', mismatched=' + mismatched);
           return;
         }
         const extraNotes = [];
         if(skipped) extraNotes.push(`건너뜀 ${skipped}행(사번/날짜/시간을 확인해주세요 — 시간은 30분 단위만 가능해요)`);
         if(duplicated) extraNotes.push(`중복이라 건너뜀 ${duplicated}행(이미 같은 내용이 등록돼 있어요)`);
         if(mismatched) extraNotes.push(`이름-사번 불일치로 건너뜀 ${mismatched}행(사번을 다시 확인해주세요)`);
+        const resultMsg = added>0
+          ? `완료: ${added}건 반영${extraNotes.length? ' · '+extraNotes.join(' · ') : ''}`
+          : `반영된 건이 없어요.${extraNotes.length? ' · '+extraNotes.join(' · ') : ''}`;
         resultBox.innerHTML = added>0
-          ? `<strong style="color:var(--green);">완료:</strong> ${added}건 반영${extraNotes.length? ' · '+extraNotes.join(' · ') : ''}`
-          : `<strong style="color:var(--stamp-red);">반영된 건이 없어요.</strong>${extraNotes.length? ' · '+extraNotes.join(' · ') : ''}`;
+          ? `<strong style="color:var(--green);">${resultMsg}</strong>`
+          : `<strong style="color:var(--stamp-red);">${resultMsg}</strong>`;
+        alert('디버그: 처리 완료!\n총 엑셀 행: ' + rows.length + '\n반영: ' + added + '\n건너뜀: ' + skipped + '\n중복: ' + duplicated + '\n이름불일치: ' + mismatched + '\n\n첫번째 행 원본 값 예시:\n사번=' + JSON.stringify(rows[0] && rows[0]['사번']) + '\n날짜=' + JSON.stringify(rows[0] && rows[0]['날짜']) + '\n시작시간=' + JSON.stringify(rows[0] && rows[0]['시작시간']));
         if(added>0) showToast('연장근무를 엑셀로 일괄 반영했어요.');
-        renderOvertimeStatus(main);
+        setTimeout(()=>{ renderOvertimeStatus(main); }, 4000);
       }catch(err){
         console.error(err);
         resultBox.innerHTML = `<span style="color:var(--stamp-red);">엑셀 처리 중 오류가 발생했어요. 열 이름(사번/날짜/시작시간/종료시간/사유)을 확인해주세요.</span>`;
+        alert('디버그: 예외 발생! ' + (err && err.message ? err.message : String(err)));
       }
     };
   }
