@@ -2070,7 +2070,7 @@ function renderOvertimeStatus(main){
     <div class="card" style="margin-bottom:20px; border-color:var(--brand);">
       <div class="section-title">📥 연장근무 엑셀 일괄 업로드</div>
       <p class="hint" style="margin-bottom:14px;">
-        엑셀 열 구성: <strong>사번, 날짜, 시작시간, 종료시간, 사유</strong> (첫 행은 제목행. 시간은 HH:MM 형식, <strong>30분 단위만 가능</strong>해요 — 예: 18:00, 18:30. 그 외 분 단위는 건너뛰어요). 업로드된 건은
+        엑셀 열 구성: <strong>사번, 이름(참고용), 날짜, 시작시간, 종료시간, 사유</strong> (첫 행은 제목행. 실제 매칭은 <strong>사번 기준</strong>이에요 — 이름은 헷갈리지 않게 확인용으로만 써주세요. 동명이인이 있어서 이름만으로는 구분이 안 돼요. 시간은 HH:MM 형식, <strong>30분 단위만 가능</strong>해요 — 예: 18:00, 18:30. 그 외 분 단위는 건너뛰어요). 업로드된 건은
         <strong>결재 없이 바로 승인 완료</strong>로 등록돼요. 여러 명·여러 건을 한 번에 올릴 때 쓰세요.
       </p>
       <button class="btn btn-ghost btn-sm" id="download-overtime-template" style="width:auto; margin-bottom:14px;">⬇ 엑셀 업로드 양식 다운로드</button>
@@ -2149,8 +2149,8 @@ function renderOvertimeStatus(main){
     otTemplateBtn.onclick = ()=>{
       if(typeof XLSX==='undefined'){ showToast('엑셀 라이브러리를 불러오지 못했어요. 인터넷 연결이 필요해요.'); return; }
       const sample = [
-        { '사번':'01', '날짜':'2026-08-20', '시작시간':'18:00', '종료시간':'20:00', '사유':'월말 정산' },
-        { '사번':'02', '날짜':'2026-08-21', '시작시간':'19:00', '종료시간':'21:30', '사유':'긴급 대응' },
+        { '사번':'01', '이름':'양민우', '날짜':'2026-08-20', '시작시간':'18:00', '종료시간':'20:00', '사유':'월말 정산' },
+        { '사번':'02', '이름':'김지운', '날짜':'2026-08-21', '시작시간':'19:00', '종료시간':'21:30', '사유':'긴급 대응' },
       ];
       const ws = XLSX.utils.json_to_sheet(sample);
       const wb = XLSX.utils.book_new();
@@ -2187,9 +2187,10 @@ function renderOvertimeStatus(main){
           return null;
         };
 
-        let added = 0, skipped = 0;
+        let added = 0, skipped = 0, duplicated = 0, mismatched = 0;
         rows.forEach(row=>{
           const empNoRaw = String(row['사번']||'').trim();
+          const nameRaw = String(row['이름']||'').trim();
           const dateRaw = row['날짜'];
           const startCell = row['시작시간'];
           const endCell = row['종료시간'];
@@ -2198,6 +2199,7 @@ function renderOvertimeStatus(main){
           const empNo = empNoRaw.padStart(2,'0');
           const emp = state.data.employees.find(e=>String(e.empNo).padStart(2,'0')===empNo);
           if(!emp){ skipped++; return; }
+          if(nameRaw && nameRaw!==emp.name){ mismatched++; return; } // 이름 참고칸을 채웠는데 사번과 실제 이름이 다르면 안전하게 건너뜀
 
           let dateStr;
           if(dateRaw instanceof Date){
@@ -2218,6 +2220,12 @@ function renderOvertimeStatus(main){
           const otStart = `${String(sh).padStart(2,'0')}:${String(sm).padStart(2,'0')}`;
           const otEnd = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`;
 
+          const isDuplicate = state.data.requests.some(r=>
+            r.type==='overtime' && r.employeeId===emp.id && r.status!=='cancelled' && r.status!=='rejected' &&
+            r.startDate===dateStr && r.otStart===otStart && r.otEnd===otEnd
+          );
+          if(isDuplicate){ duplicated++; return; }
+
           state.data.requests.push({
             id: uid('req'), employeeId: emp.id, type:'overtime',
             startDate: dateStr, endDate: dateStr,
@@ -2234,8 +2242,14 @@ function renderOvertimeStatus(main){
           resultBox.innerHTML = `<span style="color:var(--stamp-red);">저장에 실패했어요. 인터넷 연결을 확인하고 다시 시도해주세요. (반영되지 않았어요)</span>`;
           return;
         }
-        resultBox.innerHTML = `<strong style="color:var(--green);">완료:</strong> ${added}건 반영${skipped? ` · 건너뜀 ${skipped}행(사번/날짜/시간을 확인해주세요 — 시간은 30분 단위만 가능해요)`:''}`;
-        showToast('연장근무를 엑셀로 일괄 반영했어요.');
+        const extraNotes = [];
+        if(skipped) extraNotes.push(`건너뜀 ${skipped}행(사번/날짜/시간을 확인해주세요 — 시간은 30분 단위만 가능해요)`);
+        if(duplicated) extraNotes.push(`중복이라 건너뜀 ${duplicated}행(이미 같은 내용이 등록돼 있어요)`);
+        if(mismatched) extraNotes.push(`이름-사번 불일치로 건너뜀 ${mismatched}행(사번을 다시 확인해주세요)`);
+        resultBox.innerHTML = added>0
+          ? `<strong style="color:var(--green);">완료:</strong> ${added}건 반영${extraNotes.length? ' · '+extraNotes.join(' · ') : ''}`
+          : `<strong style="color:var(--stamp-red);">반영된 건이 없어요.</strong>${extraNotes.length? ' · '+extraNotes.join(' · ') : ''}`;
+        if(added>0) showToast('연장근무를 엑셀로 일괄 반영했어요.');
         renderOvertimeStatus(main);
       }catch(err){
         console.error(err);
