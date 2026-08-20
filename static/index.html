@@ -394,6 +394,7 @@ const LEAVE_TYPES = {
   sick:     { label:'병가',      icon:'🩹', deduct:false, color:'#B23B30', soft:'#B23B3018', range:true  },
   family:   { label:'경조휴가',  icon:'🎗️', deduct:false, color:'#C4901F', soft:'#C4901F18', range:false },
   overtime: { label:'연장근무',  icon:'⏰', deduct:false, color:'#5C4A8A', soft:'#5C4A8A18', range:false },
+  emergency:{ label:'긴급대응',  icon:'🚨', deduct:false, color:'#B8401E', soft:'#B8401E18', range:false },
   busytrip: { label:'출장',      icon:'✈️', deduct:false, color:'#1C8FC7', soft:'#1C8FC718', range:true, noApproval:true },
   etc:      { label:'기타',      icon:'📌', deduct:false, color:'#C2570A', soft:'#C2570A18', range:true, noApproval:true },
 };
@@ -1333,6 +1334,8 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel)
     ? `${(r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`)} · ${DEFENSE_SUBTYPES[r.subType]? DEFENSE_SUBTYPES[r.subType].label : ''}`
     : r.type==='etc'
     ? `${(r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`)} · ${ETC_SUBTYPES[r.subType]? ETC_SUBTYPES[r.subType].label : ''}`
+    : r.type==='emergency'
+    ? `${r.startDate} · 대상고객: ${r.targetClient||''}`
     : (r.startDate===r.endDate? r.startDate : `${r.startDate} ~ ${r.endDate}`);
   const stampClass = r.noApprovalNeeded? 'info' : (r.status==='approved'?'':((r.status==='rejected'||r.status==='cancelled')?'rejected':'pending'));
   const stampLabel = r.noApprovalNeeded? '등록완료' : (r.status==='approved'?'승인':(r.status==='rejected'?'반려':(r.status==='cancelled'?'취소됨':(r.status==='pending_hr'?'1차승인':'대기중'))));
@@ -1441,10 +1444,12 @@ function renderRequestForm(main){
   if(state.editingRequestId){
     const editingReq = state.data.requests.find(r=>r.id===state.editingRequestId);
     if(editingReq){
-      const startEl = document.getElementById('start-date') || document.getElementById('single-date') || document.getElementById('family-start');
+      const startEl = document.getElementById('start-date') || document.getElementById('single-date') || document.getElementById('family-start') || document.getElementById('emergency-date');
       const endEl = document.getElementById('end-date');
       if(startEl) startEl.value = editingReq.startDate;
       if(endEl) endEl.value = editingReq.endDate;
+      const clientEl = document.getElementById('emergency-client');
+      if(clientEl) clientEl.value = editingReq.targetClient || '';
       const reasonEl = document.getElementById('reason-input');
       if(reasonEl) reasonEl.value = editingReq.reason || '';
     }
@@ -1465,7 +1470,7 @@ function renderRequestForm(main){
     }
     const t = LEAVE_TYPES[type];
     const targetEmp = (state.me.canCancelApproved && state.formTargetEmployeeId) ? (empById(state.formTargetEmployeeId)||state.me) : state.me;
-    let startDate, endDate, halfType=null, splitStart=null, splitEnd=null, otStart=null, otEnd=null, otMinutes=null, familySub=null, subType=null, days=0;
+    let startDate, endDate, halfType=null, splitStart=null, splitEnd=null, otStart=null, otEnd=null, otMinutes=null, familySub=null, subType=null, targetClient=null, days=0;
     if(type==='half'){
       startDate = endDate = document.getElementById('single-date').value;
       halfType = state.formHalf;
@@ -1504,6 +1509,11 @@ function renderRequestForm(main){
       startDate = document.getElementById('start-date').value;
       endDate = document.getElementById('end-date').value || startDate;
       days = countBusinessDays(startDate, endDate);
+    }else if(type==='emergency'){
+      startDate = endDate = document.getElementById('emergency-date').value;
+      targetClient = document.getElementById('emergency-client').value.trim();
+      if(!targetClient){ showToast('대상 고객을 입력해주세요.'); return; }
+      days = 1;
     }else{
       startDate = document.getElementById('start-date').value;
       endDate = document.getElementById('end-date').value || startDate;
@@ -1537,7 +1547,7 @@ function renderRequestForm(main){
 
     const newReq = {
       id: uid('req'), employeeId: targetEmp.id, type, startDate, endDate,
-      halfType, splitStart, splitEnd, otStart, otEnd, otMinutes, familySub, subType,
+      halfType, splitStart, splitEnd, otStart, otEnd, otMinutes, familySub, subType, targetClient,
       days, reason, status:'pending', rejectReason:'', createdAt: Date.now(),
       isBackdated: parseDate(startDate) < parseDate(todayStr()),
       filedBy: targetEmp.id!==state.me.id ? state.me.id : null
@@ -1582,7 +1592,7 @@ function renderRequestForm(main){
         const existing = state.data.requests[idx];
         state.data.requests[idx] = {
           ...existing,
-          type, startDate, endDate, halfType, splitStart, splitEnd, otStart, otEnd, otMinutes, familySub, subType,
+          type, startDate, endDate, halfType, splitStart, splitEnd, otStart, otEnd, otMinutes, familySub, subType, targetClient,
           days, reason,
           isBackdated: parseDate(startDate) < parseDate(todayStr())
         };
@@ -1777,6 +1787,18 @@ function renderDateFields(){
     document.querySelectorAll('[data-etcsub]').forEach(el=>{
       el.onclick = ()=>{ state.formEtcSub = el.dataset.etcsub; renderDateFields(); };
     });
+  }else if(type==='emergency'){
+    box.innerHTML = `
+      <div class="field">
+        <label>날짜</label>
+        <input type="date" id="emergency-date" min="${minAllowedDateStr()}" value="${todayStr()}">
+      </div>
+      <div class="field">
+        <label>대상 고객</label>
+        <input type="text" id="emergency-client" placeholder="예: ○○물산">
+      </div>
+      <div class="hint">주말·야간 등 고객 요청으로 긴급 출고 대응을 한 경우예요. 연차에서 차감되지 않고, 수당은 시간이 아닌 <strong>건당</strong>으로 지급돼요.</div>
+    `;
   }else{
     box.innerHTML = `
       <div class="field row-2">
@@ -1951,6 +1973,7 @@ function requestDetailText(r){
   if(r.type==='reserve') return DEFENSE_SUBTYPES[r.subType] ? DEFENSE_SUBTYPES[r.subType].label : '';
   if(r.type==='etc') return ETC_SUBTYPES[r.subType] ? ETC_SUBTYPES[r.subType].label : '';
   if(r.type==='overtime') return `${r.otStart||''}~${r.otEnd||''}`;
+  if(r.type==='emergency') return `대상고객: ${r.targetClient||''}`;
   return '';
 }
 function requestStatusText(r){
@@ -1970,7 +1993,7 @@ function renderLeaveStatusDetail(main){
       <div>
         <div class="page-eyebrow">Leave Status Detail</div>
         <h1 class="page-title">연차현황 상세</h1>
-        <p class="page-desc">개인별로 연차·반차·훈련(예비군/민방위)·병가·경조휴가·출장·기타(교육/행사/회의 등)를 언제 썼는지 날짜별로 확인할 수 있어요. (연장근무는 별도 페이지에서 확인)</p>
+        <p class="page-desc">개인별로 연차·반차·훈련(예비군/민방위)·병가·경조휴가·출장·기타(교육/행사/회의 등)·긴급대응을 언제 썼는지 날짜별로 확인할 수 있어요. (연장근무는 별도 페이지에서 확인)</p>
       </div>
       <button class="btn btn-ghost btn-sm" id="export-detail-excel" style="width:auto; white-space:nowrap;">⬇ 엑셀 다운로드</button>
     </div>
@@ -2163,6 +2186,7 @@ function renderOvertimeStatus(main){
   if(otUploadInput){
     otUploadInput.onchange = async ()=>{
       const file = otUploadInput.files[0];
+      alert('디버그: onchange 이벤트 발생! 파일: ' + (file ? file.name + ' (' + file.size + ' bytes)' : '없음(file이 null)'));
       if(!file) return;
       const resultBox = document.getElementById('overtime-upload-result');
       resultBox.textContent = '처리 중...';
