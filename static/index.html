@@ -2124,9 +2124,25 @@ function renderOvertimeStatus(main){
       </table>
     </div>
     <div class="card">
-      <div class="section-title">연장근무 신청 내역</div>
+      <div class="section-title" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+        <span>연장근무 신청 내역</span>
+        ${state.me.canBulkUploadOvertime ? `
+        <span style="display:flex; gap:8px; align-items:center;">
+          <button class="btn btn-ghost btn-sm" id="select-all-bulk-ot" style="width:auto; font-size:12px;">전체 선택</button>
+          <button class="btn btn-sm btn-danger" id="delete-selected-bulk-overtime" style="width:auto; font-size:12px;">🗑 선택 삭제</button>
+        </span>
+        `:''}
+      </div>
       <div class="req-list">
-        ${otReqs.length? otReqs.map(r=>reqCardHTML(r,false,false,null,state.me.canCancelApproved)).join('') : `<div class="empty">연장근무 신청 내역이 없어요.</div>`}
+        ${otReqs.length? otReqs.map(r=>{
+          const card = reqCardHTML(r,false,false,null,state.me.canCancelApproved);
+          const selectable = state.me.canBulkUploadOvertime && r.bulkImported && r.status!=='cancelled' && r.status!=='rejected';
+          if(!selectable) return card;
+          return `<div style="display:flex; align-items:flex-start; gap:10px;">
+            <input type="checkbox" class="bulk-ot-checkbox" data-req-id="${r.id}" style="margin-top:20px; width:16px; height:16px; flex-shrink:0; cursor:pointer;">
+            <div style="flex:1; min-width:0;">${card}</div>
+          </div>`;
+        }).join('') : `<div class="empty">연장근무 신청 내역이 없어요.</div>`}
       </div>
     </div>
   `;
@@ -2339,6 +2355,30 @@ function renderOvertimeStatus(main){
       const saved = await saveData();
       if(!saved){ showToast('삭제 저장에 실패했어요. 다시 시도해주세요.'); return; }
       showToast(`${targets.length}건을 삭제했어요.`);
+      renderOvertimeStatus(main);
+    };
+  }
+
+  const selectAllBtn = document.getElementById('select-all-bulk-ot');
+  if(selectAllBtn){
+    selectAllBtn.onclick = ()=>{
+      const boxes = document.querySelectorAll('.bulk-ot-checkbox');
+      const allChecked = [...boxes].every(b=>b.checked);
+      boxes.forEach(b=>{ b.checked = !allChecked; });
+      selectAllBtn.textContent = allChecked ? '전체 선택' : '전체 해제';
+    };
+  }
+  const deleteSelectedBtn = document.getElementById('delete-selected-bulk-overtime');
+  if(deleteSelectedBtn){
+    deleteSelectedBtn.onclick = async ()=>{
+      const checked = [...document.querySelectorAll('.bulk-ot-checkbox:checked')].map(b=>b.dataset.reqId);
+      if(checked.length===0){ showToast('삭제할 건을 먼저 체크해주세요.'); return; }
+      if(!confirm(`선택한 ${checked.length}건을 삭제할까요? 되돌릴 수 없어요.`)) return;
+      const targetIds = new Set(checked);
+      state.data.requests = state.data.requests.filter(r=>!targetIds.has(r.id));
+      const saved = await saveData();
+      if(!saved){ showToast('삭제 저장에 실패했어요. 다시 시도해주세요.'); return; }
+      showToast(`${checked.length}건을 삭제했어요.`);
       renderOvertimeStatus(main);
     };
   }
