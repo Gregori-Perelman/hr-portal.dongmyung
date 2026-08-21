@@ -686,6 +686,10 @@ let state = {
   formEtcSub: 'edu',
   formTargetEmployeeId: null,
   approvalLogSort: 'time',
+  leaveStatusSortCol: 'name', leaveStatusSortDir: 'asc',
+  leaveDetailSortCol: 'name', leaveDetailSortDir: 'asc',
+  overtimeStatusSortCol: 'name', overtimeStatusSortDir: 'asc',
+  membersSortCol: 'name', membersSortDir: 'asc',
   editingRequestId: null,
 };
 
@@ -1078,6 +1082,28 @@ function sortSelfFirstThenAlpha(employees, meId){
   const mine = employees.filter(e=>e.id===meId);
   const others = employees.filter(e=>e.id!==meId).slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
   return [...mine, ...others];
+}
+// 범용: 특정 컬럼 기준 오름/내림차순 정렬하되, 로그인한 본인은 항상 맨 위에 고정
+function sortSelfFirstByColumn(employees, meId, getters, col, dir){
+  const mine = employees.filter(e=>e.id===meId);
+  const others = employees.filter(e=>e.id!==meId).slice().sort((a,b)=>{
+    const getter = getters[col] || getters._default;
+    const va = getter(a), vb = getter(b);
+    let result;
+    if(typeof va === 'number' && typeof vb === 'number'){ result = va - vb; }
+    else{ result = String(va).localeCompare(String(vb), 'ko'); }
+    return dir==='asc' ? result : -result;
+  });
+  return [...mine, ...others];
+}
+function sortArrowFor(state_col, state_dir, col){
+  return state_col===col ? (state_dir==='asc'?' ▲':' ▼') : '';
+}
+function bindSortHeaders(container, onSort){
+  container.querySelectorAll('[data-sort-col]').forEach(th=>{
+    th.style.cursor = 'pointer';
+    th.onclick = ()=> onSort(th.dataset.sortCol);
+  });
 }
 function annualUsed(empId){
   const emp = empById(empId);
@@ -1874,27 +1900,45 @@ function renderMyRequests(main){
 
 /* ---------------- LEAVE STATUS ---------------- */
 function renderLeaveStatus(main){
-  const visible = sortSelfFirstThenAlpha(
+  const leaveStatusGetters = {
+    empNo: e=>String(e.empNo).padStart(2,'0'),
+    name: e=>e.name,
+    team: e=>e.team||'',
+    total: e=>e.annualTotal,
+    used: e=>annualUsed(e.id),
+    remain: e=>e.annualTotal - annualUsed(e.id),
+    _default: e=>e.name,
+  };
+  const visible = sortSelfFirstByColumn(
     visibleEmployeesForStatus(state.me).filter(e=>!isOwnerTierEmp(e)),
-    state.me.id
+    state.me.id, leaveStatusGetters, state.leaveStatusSortCol, state.leaveStatusSortDir
   );
   const visibleIds = new Set(visible.map(e=>e.id));
   const approvedReqs = state.data.requests
     .filter(r=> r.status==='approved' && r.type!=='overtime' && visibleIds.has(r.employeeId))
     .sort((a,b)=>b.createdAt-a.createdAt);
 
+  const arrow = (col)=>sortArrowFor(state.leaveStatusSortCol, state.leaveStatusSortDir, col);
   main.innerHTML = `
     <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
       <div>
         <div class="page-eyebrow">Leave Status</div>
         <h1 class="page-title">연차현황</h1>
-        <p class="page-desc">본인, 본인이 속한 팀의 팀장/지점장, 연장근무 최종승인자, 시스템 관리자, 전체열람 권한자만 조회할 수 있어요. (연차 · 반차 · 분할반차 사용/잔여 현황)</p>
+        <p class="page-desc">본인, 본인이 속한 팀의 팀장/지점장, 연장근무 최종승인자, 시스템 관리자, 전체열람 권한자만 조회할 수 있어요. (연차 · 반차 · 분할반차 사용/잔여 현황) 표 제목을 클릭하면 그 기준으로 정렬돼요. 본인은 항상 맨 위예요.</p>
       </div>
       ${visible.length>1 ? `<button class="btn btn-ghost btn-sm" id="export-leave-excel" style="width:auto; white-space:nowrap;">⬇ 엑셀 다운로드</button>`:''}
     </div>
     <div class="card" style="margin-bottom:20px;">
       <table class="members">
-        <thead><tr><th>사번</th><th>이름</th><th>팀</th><th>직급</th><th>총연차</th><th>사용</th><th>잔여</th></tr></thead>
+        <thead><tr>
+          <th data-sort-col="empNo">사번${arrow('empNo')}</th>
+          <th data-sort-col="name">이름${arrow('name')}</th>
+          <th data-sort-col="team">팀${arrow('team')}</th>
+          <th>직급</th>
+          <th data-sort-col="total">총연차${arrow('total')}</th>
+          <th data-sort-col="used">사용${arrow('used')}</th>
+          <th data-sort-col="remain">잔여${arrow('remain')}</th>
+        </tr></thead>
         <tbody>
           ${visible.map(e=>{
             const used = annualUsed(e.id);
@@ -1922,6 +1966,11 @@ function renderLeaveStatus(main){
     </div>
     `:''}
   `;
+  bindSortHeaders(main, (col)=>{
+    if(state.leaveStatusSortCol===col){ state.leaveStatusSortDir = state.leaveStatusSortDir==='asc'?'desc':'asc'; }
+    else{ state.leaveStatusSortCol = col; state.leaveStatusSortDir = 'asc'; }
+    renderLeaveStatus(main);
+  });
   if(state.me.canCancelApproved){
     document.querySelectorAll('[data-admin-cancel]').forEach(btn=>{
       btn.onclick = async ()=>{
@@ -1984,24 +2033,40 @@ function requestStatusText(r){
   return '대기중';
 }
 function renderLeaveStatusDetail(main){
-  const visible = sortSelfFirstThenAlpha(
+  const detailGetters = {
+    empNo: e=>String(e.empNo).padStart(2,'0'),
+    name: e=>e.name,
+    _default: e=>e.name,
+  };
+  const visible = sortSelfFirstByColumn(
     visibleEmployeesForStatus(state.me).filter(e=>!isOwnerTierEmp(e)),
-    state.me.id
+    state.me.id, detailGetters, state.leaveDetailSortCol, state.leaveDetailSortDir
   );
+  const arrow = (col)=>sortArrowFor(state.leaveDetailSortCol, state.leaveDetailSortDir, col);
   main.innerHTML = `
     <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
       <div>
         <div class="page-eyebrow">Leave Status Detail</div>
         <h1 class="page-title">연차현황 상세</h1>
-        <p class="page-desc">개인별로 연차·반차·훈련(예비군/민방위)·병가·경조휴가·출장·기타(교육/행사/회의 등)·긴급대응을 언제 썼는지 날짜별로 확인할 수 있어요. (연장근무는 별도 페이지에서 확인)</p>
+        <p class="page-desc">개인별로 연차·반차·훈련(예비군/민방위)·병가·경조휴가·출장·기타(교육/행사/회의 등)·긴급대응을 언제 썼는지 날짜별로 확인할 수 있어요. (연장근무는 별도 페이지에서 확인) 본인은 항상 맨 위예요.</p>
       </div>
       <button class="btn btn-ghost btn-sm" id="export-detail-excel" style="width:auto; white-space:nowrap;">⬇ 엑셀 다운로드</button>
     </div>
-    <div class="field" style="max-width:320px; margin-bottom:16px;">
-      <input type="text" id="detail-name-filter" placeholder="이름으로 검색">
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px;">
+      <div class="field" style="max-width:320px; margin-bottom:0;">
+        <input type="text" id="detail-name-filter" placeholder="이름으로 검색">
+      </div>
+      <span style="font-size:12px; color:var(--muted); font-weight:700;">정렬:</span>
+      <button class="btn btn-ghost btn-sm" data-sort-col="empNo" style="width:auto; font-size:12px;">사번${arrow('empNo')}</button>
+      <button class="btn btn-ghost btn-sm" data-sort-col="name" style="width:auto; font-size:12px;">이름${arrow('name')}</button>
     </div>
     <div id="detail-list"></div>
   `;
+  bindSortHeaders(main, (col)=>{
+    if(state.leaveDetailSortCol===col){ state.leaveDetailSortDir = state.leaveDetailSortDir==='asc'?'desc':'asc'; }
+    else{ state.leaveDetailSortCol = col; state.leaveDetailSortDir = 'asc'; }
+    renderLeaveStatusDetail(main);
+  });
 
   function buildList(filterText){
     const list = document.getElementById('detail-list');
@@ -2015,14 +2080,16 @@ function renderLeaveStatusDetail(main){
       approved.forEach(r=>{ typeCounts[r.type] = (typeCounts[r.type]||0)+1; });
       const summaryBits = Object.entries(typeCounts).map(([k,v])=>`${LEAVE_TYPES[k].label} ${v}건`).join(' · ');
       return `
-      <details class="card" style="margin-bottom:10px; padding:16px 20px;">
+      <details class="card" style="margin-bottom:16px; padding:16px 20px; border:1.5px solid var(--line); box-shadow:0 1px 3px rgba(0,0,0,0.04);">
         <summary style="cursor:pointer; font-weight:800; font-size:14.5px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
-          <span>${e.name} <span style="font-weight:600; color:var(--muted); font-size:12.5px;">${e.team||''} · ${e.position||''}</span></span>
+          <span style="font-family:var(--mono); color:var(--muted); font-weight:700; margin-right:4px;">${e.empNo||''}</span>
+          <span style="flex:1;">${e.name} <span style="font-weight:600; color:var(--muted); font-size:12.5px;">${e.team||''} · ${e.position||''}</span></span>
           <span style="font-weight:600; font-size:12.5px; color:var(--brand); font-family:var(--mono);">
             연차/반차 사용 ${trimNum(usedDays)}일 ${summaryBits? ' · '+summaryBits : ''} · 총 ${reqs.length}건
           </span>
         </summary>
-        <table class="members" style="margin-top:14px;">
+        <div style="border-top:1.5px solid var(--line); margin-top:12px; padding-top:12px;">
+        <table class="members">
           <thead><tr><th>날짜</th><th>유형</th><th>세부</th><th>일수</th><th>상태</th></tr></thead>
           <tbody>
             ${reqs.map(r=>{
@@ -2038,6 +2105,7 @@ function renderLeaveStatusDetail(main){
             }).join('') || `<tr><td colspan="5" style="text-align:center; color:var(--muted);">기록이 없어요</td></tr>`}
           </tbody>
         </table>
+        </div>
       </details>`;
     }).join('');
   }
@@ -2071,21 +2139,28 @@ function renderLeaveStatusDetail(main){
 
 /* ---------------- OVERTIME STATUS ---------------- */
 function renderOvertimeStatus(main){
-  const visible = sortSelfFirstThenAlpha(
+  const overtimeGetters = {
+    empNo: e=>String(e.empNo).padStart(2,'0'),
+    name: e=>e.name,
+    team: e=>e.team||'',
+    _default: e=>e.name,
+  };
+  const visible = sortSelfFirstByColumn(
     visibleEmployeesForStatus(state.me).filter(e=>!isOwnerTierEmp(e)),
-    state.me.id
+    state.me.id, overtimeGetters, state.overtimeStatusSortCol, state.overtimeStatusSortDir
   );
   const visibleIds = new Set(visible.map(e=>e.id));
   const otReqs = state.data.requests
     .filter(r=>r.type==='overtime' && visibleIds.has(r.employeeId))
     .sort((a,b)=>b.createdAt-a.createdAt);
 
+  const arrow = (col)=>sortArrowFor(state.overtimeStatusSortCol, state.overtimeStatusSortDir, col);
   main.innerHTML = `
     <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
       <div>
         <div class="page-eyebrow">Overtime Status</div>
         <h1 class="page-title">연장근무 현황</h1>
-        <p class="page-desc">본인, 본인이 속한 팀의 팀장/지점장, 연장근무 최종승인자, 시스템 관리자, 전체열람 권한자만 조회할 수 있어요.</p>
+        <p class="page-desc">본인, 본인이 속한 팀의 팀장/지점장, 연장근무 최종승인자, 시스템 관리자, 전체열람 권한자만 조회할 수 있어요. 표 제목을 클릭하면 그 기준으로 정렬돼요. 본인은 항상 맨 위예요.</p>
       </div>
       ${visible.length>1 ? `<button class="btn btn-ghost btn-sm" id="export-overtime-excel" style="width:auto; white-space:nowrap;">⬇ 엑셀 다운로드</button>`:''}
     </div>
@@ -2107,7 +2182,12 @@ function renderOvertimeStatus(main){
     `:''}
     <div class="card" style="margin-bottom:20px;">
       <table class="members">
-        <thead><tr><th>이름</th><th>팀</th><th>승인된 연장근무 총 시간</th></tr></thead>
+        <thead><tr>
+          <th data-sort-col="empNo">사번${arrow('empNo')}</th>
+          <th data-sort-col="name">이름${arrow('name')}</th>
+          <th data-sort-col="team">팀${arrow('team')}</th>
+          <th>승인된 연장근무 총 시간</th>
+        </tr></thead>
         <tbody>
           ${visible.map(e=>{
             const approvedMins = state.data.requests
@@ -2115,6 +2195,7 @@ function renderOvertimeStatus(main){
               .reduce((sum,r)=> sum + (r.otMinutes||0), 0);
             return `
             <tr>
+              <td style="font-family:var(--mono); color:var(--muted);">${e.empNo||''}</td>
               <td><strong>${e.name}</strong>${e.id===state.me.id?' <span style="color:var(--muted); font-size:11px;">(나)</span>':''}</td>
               <td>${e.team||''}</td>
               <td style="font-family:var(--mono); color:var(--brand);">${formatMinutes(approvedMins)}</td>
@@ -2146,6 +2227,11 @@ function renderOvertimeStatus(main){
       </div>
     </div>
   `;
+  bindSortHeaders(main, (col)=>{
+    if(state.overtimeStatusSortCol===col){ state.overtimeStatusSortDir = state.overtimeStatusSortDir==='asc'?'desc':'asc'; }
+    else{ state.overtimeStatusSortCol = col; state.overtimeStatusSortDir = 'asc'; }
+    renderOvertimeStatus(main);
+  });
   if(state.me.canCancelApproved){
     document.querySelectorAll('[data-admin-cancel]').forEach(btn=>{
       btn.onclick = async ()=>{
@@ -2906,7 +2992,7 @@ function renderMembers(main){
     </div>
     <div class="card" style="margin-bottom:20px;">
       <table class="members">
-        <thead><tr><th>사번</th><th>이름</th><th>팀</th><th>직책</th><th>권한</th><th>총연차</th><th>사용갯수</th><th>잔여연차</th><th></th></tr></thead>
+        <thead><tr><th data-sort-col="empNo" style="cursor:pointer;">사번${sortArrowFor(state.membersSortCol, state.membersSortDir, 'empNo')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrowFor(state.membersSortCol, state.membersSortDir, 'name')}</th><th>팀</th><th>직책</th><th>권한</th><th>총연차</th><th>사용갯수</th><th>잔여연차</th><th></th></tr></thead>
         <tbody id="members-body"></tbody>
       </table>
     </div>
@@ -2930,7 +3016,17 @@ function renderMembers(main){
   `;
   const body = document.getElementById('members-body');
   if(body){
-  const sortedEmployees = sortSelfFirstThenAlpha(state.data.employees, state.me.id);
+  bindSortHeaders(main, (col)=>{
+    if(state.membersSortCol===col){ state.membersSortDir = state.membersSortDir==='asc'?'desc':'asc'; }
+    else{ state.membersSortCol = col; state.membersSortDir = 'asc'; }
+    renderMembers(main);
+  });
+  const membersGetters = {
+    empNo: e=>String(e.empNo).padStart(2,'0'),
+    name: e=>e.name,
+    _default: e=>e.name,
+  };
+  const sortedEmployees = sortSelfFirstByColumn(state.data.employees, state.me.id, membersGetters, state.membersSortCol, state.membersSortDir);
   body.innerHTML = sortedEmployees.map(e=>{
     const used = annualUsed(e.id);
     const remain = (e.annualTotal - used).toFixed(1).replace(/\.0$/,'');
