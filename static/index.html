@@ -1312,19 +1312,25 @@ function renderDashboard(main){
 }
 
 function renderMiniCalendar(container){
-  const now = new Date();
-  const year = now.getFullYear(), month = now.getMonth();
+  const today = new Date();
+  if(state.miniCalYear==null){ state.miniCalYear = today.getFullYear(); state.miniCalMonth = today.getMonth(); }
+  const year = state.miniCalYear, month = state.miniCalMonth;
   const first = new Date(year, month, 1);
   const startOffset = first.getDay();
   const daysInMonth = new Date(year, month+1, 0).getDate();
-  let html = `<div style="font-family:var(--mono); font-weight:700; font-size:13px; margin-bottom:10px;">${year}.${String(month+1).padStart(2,'0')}</div>`;
+  const isCurrentMonth = (year===today.getFullYear() && month===today.getMonth());
+  let html = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+      <button id="minical-prev" style="background:none; border:none; cursor:pointer; font-size:15px; color:var(--ink-soft); padding:2px 8px;">◀</button>
+      <div style="font-family:var(--mono); font-weight:700; font-size:13px;">${year}.${String(month+1).padStart(2,'0')}</div>
+      <button id="minical-next" style="background:none; border:none; cursor:pointer; font-size:15px; color:var(--ink-soft); padding:2px 8px;">▶</button>
+    </div>`;
   html += `<div class="cal-grid" style="gap:4px;">`;
   ['일','월','화','수','목','금','토'].forEach(d=> html += `<div class="cal-dow" style="font-size:10px;">${d}</div>`);
   for(let i=0;i<startOffset;i++) html += `<div></div>`;
   for(let d=1; d<=daysInMonth; d++){
     const dateStr = fmtDate(new Date(year,month,d));
     const dayReqs = state.data.requests.filter(r=> r.status!=='rejected' && r.status!=='cancelled' && r.type!=='overtime' && dateStr>=r.startDate && dateStr<=r.endDate && requestAppliesToDate(r, dateStr));
-    const isToday = d===now.getDate();
+    const isToday = isCurrentMonth && d===today.getDate();
     html += `<div data-minical-date="${dateStr}" style="aspect-ratio:1; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer;
       font-family:var(--mono); font-size:10.5px; position:relative;
       background:${dayReqs.length? 'var(--brand)':'transparent'}; color:${dayReqs.length?'#fff':'var(--ink-soft)'};
@@ -1335,6 +1341,16 @@ function renderMiniCalendar(container){
   }
   html += `</div><div class="hint">숫자는 해당 날짜에 휴가/훈련 중인 인원 수예요. 날짜를 클릭하면 회사 캘린더로 이동해요.</div>`;
   container.innerHTML = html;
+  document.getElementById('minical-prev').onclick = ()=>{
+    state.miniCalMonth--;
+    if(state.miniCalMonth<0){ state.miniCalMonth=11; state.miniCalYear--; }
+    renderMiniCalendar(container);
+  };
+  document.getElementById('minical-next').onclick = ()=>{
+    state.miniCalMonth++;
+    if(state.miniCalMonth>11){ state.miniCalMonth=0; state.miniCalYear++; }
+    renderMiniCalendar(container);
+  };
   container.querySelectorAll('[data-minical-date]').forEach(el=>{
     el.onclick = ()=>{
       state.calYear = year;
