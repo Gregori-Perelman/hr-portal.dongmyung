@@ -1602,6 +1602,7 @@ function renderRequestForm(main){
       }else{
         newReq.status = 'approved';
         newReq.approverId = targetEmp.id;
+        newReq.approvedAt = Date.now();
         newReq.autoApproved = true;
       }
     }
@@ -2471,17 +2472,35 @@ function renderOvertimeStatus(main){
 }
 
 /* ---------------- APPROVAL LOG (시스템관리자 전용) ---------------- */
-function approverDisplayText(r){
-  if(r.status==='cancelled') return `${empName(r.cancelledBy)} (승인취소)`;
-  if(r.noApprovalNeeded) return '결재 불필요(자동등록)';
-  if(r.type==='overtime'){
-    if(r.status==='approved') return `${empName(r.teamApproverId)} → ${empName(r.hrApproverId)}`;
-    if(r.status==='rejected') return `${empName(r.approverId)} (반려)`;
-    return '-';
+function fmtDateTime(ms){
+  if(!ms) return '';
+  const d = new Date(ms);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function approvalChainText(r){
+  const drafter = empName(r.employeeId);
+  if(r.status==='cancelled'){
+    return `${drafter} → ${empName(r.cancelledBy)} (승인취소${r.cancelledAt? ' · '+fmtDateTime(r.cancelledAt):''})`;
   }
-  if(r.status==='approved') return `${empName(r.approverId)}${r.autoApproved? ' (자동승인)':''}`;
-  if(r.status==='rejected') return `${empName(r.approverId)} (반려)`;
-  return '-';
+  if(r.noApprovalNeeded) return `${drafter} (결재 불필요 · 자동등록)`;
+  if(r.type==='overtime'){
+    if(r.status==='approved'){
+      const parts = [drafter, `${empName(r.teamApproverId)}(팀장${r.teamApprovedAt? ' · '+fmtDateTime(r.teamApprovedAt):''})`];
+      if(r.hrApproverId && r.hrApproverId!==r.teamApproverId){
+        parts.push(`${empName(r.hrApproverId)}(업무지원팀장${r.hrApprovedAt? ' · '+fmtDateTime(r.hrApprovedAt):''})`);
+      }
+      return parts.join(' → ');
+    }
+    if(r.status==='rejected') return `${drafter} → ${empName(r.approverId)}(반려${r.approvedAt? ' · '+fmtDateTime(r.approvedAt):''})`;
+    return `${drafter} (결재 대기중)`;
+  }
+  if(r.status==='approved'){
+    return `${drafter} → ${empName(r.approverId)}(팀장${r.autoApproved? ' · 자동승인':''}${r.approvedAt? ' · '+fmtDateTime(r.approvedAt):''})`;
+  }
+  if(r.status==='rejected'){
+    return `${drafter} → ${empName(r.approverId)}(반려${r.approvedAt? ' · '+fmtDateTime(r.approvedAt):''})`;
+  }
+  return `${drafter} (결재 대기중)`;
 }
 function decisionStatusText(r){
   if(r.status==='approved') return '승인';
@@ -2535,13 +2554,13 @@ function renderApprovalLog(main){
       <td><span style="background:${t.soft}; color:${t.color}; padding:2px 8px; border-radius:10px; font-size:11.5px; font-weight:700;">${t.label}</span></td>
       <td style="font-family:var(--mono); font-size:12px;">${dateRange}</td>
       <td style="font-size:12.5px; font-weight:700;">${decisionStatusText(r)}</td>
-      <td style="font-size:12.5px; color:var(--ink-soft);">${approverDisplayText(r)}</td>
+      <td style="font-size:12px; color:var(--ink-soft); white-space:nowrap;">${approvalChainText(r)}</td>
       ${canDelete? `<td><button class="btn btn-sm btn-danger" data-log-delete="${r.id}">삭제</button></td>`:''}
     </tr>`;
   };
   const sortArrow = (col)=> state.approvalLogSortCol===col ? (state.approvalLogSortDir==='asc'?' ▲':' ▼') : '';
-  const theadCols = `<th data-sort-col="date" style="cursor:pointer;">기안일${sortArrow('date')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrow('name')}</th><th>팀</th><th>유형</th><th data-sort-col="period" style="cursor:pointer;">기간${sortArrow('period')}</th><th>결과</th><th>처리자</th>${canDelete? '<th></th>':''}`;
-  const theadColsNoTeam = `<th data-sort-col="date" style="cursor:pointer;">기안일${sortArrow('date')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrow('name')}</th><th>유형</th><th data-sort-col="period" style="cursor:pointer;">기간${sortArrow('period')}</th><th>결과</th><th>처리자</th>${canDelete? '<th></th>':''}`;
+  const theadCols = `<th data-sort-col="date" style="cursor:pointer;">기안일${sortArrow('date')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrow('name')}</th><th>팀</th><th>유형</th><th data-sort-col="period" style="cursor:pointer;">기간${sortArrow('period')}</th><th>결과</th><th>결재선</th>${canDelete? '<th></th>':''}`;
+  const theadColsNoTeam = `<th data-sort-col="date" style="cursor:pointer;">기안일${sortArrow('date')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrow('name')}</th><th>유형</th><th data-sort-col="period" style="cursor:pointer;">기간${sortArrow('period')}</th><th>결과</th><th>결재선</th>${canDelete? '<th></th>':''}`;
 
   if(decided.length===0){
     list.innerHTML = `<div class="card"><div class="empty">아직 처리된 결재 내역이 없어요.</div></div>`;
@@ -2734,7 +2753,7 @@ function renderApprovals(main){
           showToast(`${empName(r.employeeId)}님의 연장근무를 1차 승인했어요. ${finalApproverName()}님의 최종 승인이 남았어요.`);
         }
       }else{
-        r.status='approved'; r.approverId=state.me.id;
+        r.status='approved'; r.approverId=state.me.id; r.approvedAt=Date.now();
         if(r.type==='overtime') r.hrApproverId=state.me.id;
         await saveData();
         showToast(`${empName(r.employeeId)}님의 신청을 승인했어요.`);
@@ -2747,7 +2766,7 @@ function renderApprovals(main){
       const r = state.data.requests.find(x=>x.id===btn.dataset.reject);
       if(!canApprove(r)){ showToast('이 신청은 본인만 승인할 수 있어요.'); return; }
       const reason = prompt('반려 사유를 입력해주세요 (선택)') || '';
-      r.status='rejected'; r.rejectReason=reason; r.approverId=state.me.id;
+      r.status='rejected'; r.rejectReason=reason; r.approverId=state.me.id; r.approvedAt=Date.now();
       await saveData();
       showToast(`${empName(r.employeeId)}님의 신청을 반려했어요.`);
       renderApprovals(main);
