@@ -470,7 +470,7 @@ const SEED_EMPLOYEES = [
   { empNo:'26', name:'정태건',    team:'FA시스템팀',  position:'팀장',  annualTotal:18 },
   { empNo:'16', name:'강현동',    team:'물류팀',      position:'팀원',  annualTotal:23 },
   { empNo:'23', name:'여승현',    team:'물류팀',      position:'팀원',  annualTotal:21 },
-  { empNo:'50', name:'최치현',    team:'디엠비툴',    position:'팀장',  annualTotal:11 },
+  { empNo:'50', name:'최치현',    team:'디엠비툴',    position:'팀장',  annualTotal:7 },
   { empNo:'25', name:'임준목',    team:'본사영업부',  position:'팀원',  annualTotal:21 },
   { empNo:'20', name:'백지완',    team:'물류팀',      position:'팀원',  annualTotal:16 },
   { empNo:'57', name:'김태원',    team:'물류팀',      position:'팀원',  annualTotal:18 },
@@ -482,7 +482,7 @@ const SEED_EMPLOYEES = [
   { empNo:'14', name:'박주형',    team:'물류팀',      position:'팀원',  annualTotal:16 },
   { empNo:'32', name:'조상호',    team:'물류팀',      position:'팀원',  annualTotal:20 },
   { empNo:'58', name:'김가림',    team:'본사영업부',  position:'팀원',  annualTotal:18 },
-  { empNo:'38', name:'박찬호',    team:'디엠비툴',    position:'팀원',  annualTotal:12 },
+  { empNo:'38', name:'박찬호',    team:'디엠비툴',    position:'팀원',  annualTotal:7 },
   { empNo:'35', name:'서주영',    team:'영업지원팀',  position:'팀원',  annualTotal:17 },
   { empNo:'49', name:'김석한',    team:'물류팀',      position:'팀원',  annualTotal:18 },
   { empNo:'31', name:'정하연',    team:'서울지점',    position:'팀원',  annualTotal:20 },
@@ -605,17 +605,9 @@ const IMPORTED_LEAVE_BATCH_1 = [
   {empNo:"35", type:"annual", startDate:"2026-03-16", endDate:"2026-03-16", days:1},
   {empNo:"35", type:"annual", startDate:"2026-08-03", endDate:"2026-08-03", days:1},
   {empNo:"35", type:"half", startDate:"2026-03-25", endDate:"2026-03-25", days:0.5, halfType:"am"},
-  {empNo:"38", type:"annual", startDate:"2026-01-02", endDate:"2026-01-02", days:1},
-  {empNo:"38", type:"annual", startDate:"2026-03-09", endDate:"2026-03-09", days:1},
-  {empNo:"38", type:"annual", startDate:"2026-03-10", endDate:"2026-03-10", days:1},
-  {empNo:"38", type:"annual", startDate:"2026-03-11", endDate:"2026-03-11", days:1},
-  {empNo:"38", type:"annual", startDate:"2026-05-04", endDate:"2026-05-04", days:1},
   {empNo:"38", type:"annual", startDate:"2026-06-11", endDate:"2026-06-11", days:1},
   {empNo:"38", type:"annual", startDate:"2026-07-10", endDate:"2026-07-10", days:1},
   {empNo:"38", type:"annual", startDate:"2026-07-13", endDate:"2026-07-13", days:1},
-  {empNo:"38", type:"half", startDate:"2026-02-11", endDate:"2026-02-11", days:0.5, halfType:"am"},
-  {empNo:"38", type:"half", startDate:"2026-03-06", endDate:"2026-03-06", days:0.5, halfType:"am"},
-  {empNo:"38", type:"half", startDate:"2026-05-11", endDate:"2026-05-11", days:0.5, halfType:"am"},
   {empNo:"40", type:"annual", startDate:"2026-03-19", endDate:"2026-03-19", days:1},
   {empNo:"40", type:"annual", startDate:"2026-05-08", endDate:"2026-05-08", days:1},
   {empNo:"40", type:"annual", startDate:"2026-07-10", endDate:"2026-07-10", days:1},
@@ -643,17 +635,10 @@ const IMPORTED_LEAVE_BATCH_1 = [
   {empNo:"49", type:"annual", startDate:"2026-06-12", endDate:"2026-06-12", days:1},
   {empNo:"49", type:"annual", startDate:"2026-07-20", endDate:"2026-07-20", days:1},
   {empNo:"49", type:"half", startDate:"2026-04-23", endDate:"2026-04-23", days:0.5, halfType:"am"},
-  {empNo:"50", type:"annual", startDate:"2026-01-09", endDate:"2026-01-09", days:1},
-  {empNo:"50", type:"annual", startDate:"2026-02-20", endDate:"2026-02-20", days:1},
-  {empNo:"50", type:"annual", startDate:"2026-03-23", endDate:"2026-03-23", days:1},
-  {empNo:"50", type:"annual", startDate:"2026-03-24", endDate:"2026-03-24", days:1},
-  {empNo:"50", type:"annual", startDate:"2026-04-30", endDate:"2026-04-30", days:1},
   {empNo:"50", type:"annual", startDate:"2026-07-16", endDate:"2026-07-16", days:1},
   {empNo:"50", type:"annual", startDate:"2026-08-03", endDate:"2026-08-03", days:1},
   {empNo:"50", type:"annual", startDate:"2026-08-04", endDate:"2026-08-04", days:1},
   {empNo:"50", type:"annual", startDate:"2026-08-07", endDate:"2026-08-07", days:1},
-  {empNo:"50", type:"half", startDate:"2026-02-06", endDate:"2026-02-06", days:0.5, halfType:"am"},
-  {empNo:"50", type:"half", startDate:"2026-05-15", endDate:"2026-05-15", days:0.5, halfType:"am"},
   {empNo:"50", type:"half", startDate:"2026-06-22", endDate:"2026-06-22", days:0.5, halfType:"am"},
   {empNo:"54", type:"annual", startDate:"2026-01-19", endDate:"2026-01-19", days:1},
   {empNo:"54", type:"annual", startDate:"2026-01-20", endDate:"2026-01-20", days:1},
@@ -992,6 +977,25 @@ async function loadData(){
       state.data.grantedProxyAnyDateV1 = true;
       await saveData();
     }
+    if(!state.data.fixedParkChoiJuneResetV1){
+      // 박찬호(38), 최치현(50): 올해 6월부터 총연차 7일로 재계산.
+      // 5월까지의 사용내역(연차/반차 등)은 삭제하고, 6/1 이후 사용분은 그대로 유지.
+      const targets = ['38','50'];
+      const cutoff = '2026-06-01';
+      state.data.employees.forEach(e=>{
+        if(targets.includes(String(e.empNo).padStart(2,'0'))){ e.annualTotal = 7; }
+      });
+      state.data.requests = state.data.requests.filter(r=>{
+        if(r.type==='overtime') return true; // 연장근무는 영향 없음
+        const owner = state.data.employees.find(e=>e.id===r.employeeId);
+        if(!owner) return true;
+        const empNoP = String(owner.empNo).padStart(2,'0');
+        if(!targets.includes(empNoP)) return true; // 대상자가 아니면 그대로 유지
+        return r.startDate >= cutoff; // 6/1 이전 기록은 삭제, 이후는 유지
+      });
+      state.data.fixedParkChoiJuneResetV1 = true;
+      await saveData();
+    }
     if(!state.data.deletionLog){
       state.data.deletionLog = [];
       await saveData();
@@ -1012,7 +1016,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true, grantedNamHongBackupV1: true, grantedNamHongAdminV1: true, addedParkLeeOwnerTierV1: true, grantedOvertimeBulkUploadV1: true, grantedProxyAnyDateV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true, grantedNamHongBackupV1: true, grantedNamHongAdminV1: true, addedParkLeeOwnerTierV1: true, grantedOvertimeBulkUploadV1: true, grantedProxyAnyDateV1: true, fixedParkChoiJuneResetV1: true };
     await saveData();
   }
 }
