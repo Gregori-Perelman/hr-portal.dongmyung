@@ -462,11 +462,11 @@ const SEED_EMPLOYEES = [
   { empNo:'21', name:'허재관',    team:'본사',       position:'부사장', annualTotal:22 },
   { empNo:'41', name:'심대흥',    team:'본사영업부',  position:'팀원',  annualTotal:16 },
   { empNo:'33', name:'신상무',    team:'서울지점',    position:'지점장', annualTotal:19 },
-  { empNo:'10', name:'정나은',    team:'영업지원팀',  position:'팀장',  annualTotal:25, isHrApprover:true, isAdmin:true, canUploadRoster:true, canCancelApproved:true, canViewDetailLog:true, canBulkUploadOvertime:true },
+  { empNo:'10', name:'정나은',    team:'영업지원팀',  position:'팀장',  annualTotal:25, isHrApprover:true, isAdmin:true, canUploadRoster:true, canCancelApproved:true, canViewDetailLog:true, canBulkUploadOvertime:true, canProxyAnyDate:true },
   { empNo:'54', name:'구현',      team:'물류팀',      position:'팀장',  annualTotal:18 },
-  { empNo:'05',  name:'김남홍',    team:'영업지원팀',  position:'팀원',  annualTotal:25, isFullViewer:true, canUploadRoster:true, canViewDetailLog:true, canBackupData:true, isAdmin:true, canBulkUploadOvertime:true },
+  { empNo:'05',  name:'김남홍',    team:'영업지원팀',  position:'팀원',  annualTotal:25, isFullViewer:true, canUploadRoster:true, canViewDetailLog:true, canBackupData:true, isAdmin:true, canBulkUploadOvertime:true, canProxyAnyDate:true },
   { empNo:'13', name:'김성준YB',  team:'본사영업부',  position:'팀장',  annualTotal:24 },
-  { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true, canUploadRoster:true, canCancelApproved:true, canViewDetailLog:true, canBulkUploadOvertime:true },
+  { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true, canUploadRoster:true, canCancelApproved:true, canViewDetailLog:true, canBulkUploadOvertime:true, canProxyAnyDate:true },
   { empNo:'26', name:'정태건',    team:'FA시스템팀',  position:'팀장',  annualTotal:18 },
   { empNo:'16', name:'강현동',    team:'물류팀',      position:'팀원',  annualTotal:23 },
   { empNo:'23', name:'여승현',    team:'물류팀',      position:'팀원',  annualTotal:21 },
@@ -695,7 +695,12 @@ let state = {
 
 function uid(prefix){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function todayStr(){ const d=new Date(); return fmtDate(d); }
-function minAllowedDateStr(){ const d=new Date(); d.setDate(d.getDate()-10); return fmtDate(d); }
+function minAllowedDateStr(){
+  // 대리기안 권한자(canProxyAnyDate)가 본인이 아닌 타인 명의로 신청 중이면 사후신청 기간 제한을 없앤다
+  const isUnrestrictedProxy = state.me.canProxyAnyDate && state.formTargetEmployeeId && state.formTargetEmployeeId!==state.me.id;
+  if(isUnrestrictedProxy) return '2000-01-01';
+  const d=new Date(); d.setDate(d.getDate()-10); return fmtDate(d);
+}
 function hourOptions(){
   let opts = '';
   for(let h=0; h<24; h++){ opts += `<option value="${h}">${String(h).padStart(2,'0')}:00</option>`; }
@@ -800,6 +805,7 @@ function buildSeedEmployees(){
     canSelfCancelApproved: !!s.canSelfCancelApproved,
     canBackupData: !!s.canBackupData,
     canBulkUploadOvertime: !!s.canBulkUploadOvertime,
+    canProxyAnyDate: !!s.canProxyAnyDate,
     annualTotal: s.annualTotal, baseUsed: 0,
   }));
 }
@@ -977,6 +983,15 @@ async function loadData(){
       state.data.grantedOvertimeBulkUploadV1 = true;
       await saveData();
     }
+    if(!state.data.grantedProxyAnyDateV1){
+      // 이동현, 정나은, 김남홍은 대리 기안 시 사후신청 10일 제한 없이 올릴 수 있게 부여
+      const targets = ['40','10','05'];
+      state.data.employees.forEach(e=>{
+        if(targets.includes(String(e.empNo).padStart(2,'0'))){ e.canProxyAnyDate = true; }
+      });
+      state.data.grantedProxyAnyDateV1 = true;
+      await saveData();
+    }
     if(!state.data.deletionLog){
       state.data.deletionLog = [];
       await saveData();
@@ -997,7 +1012,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true, grantedNamHongBackupV1: true, grantedNamHongAdminV1: true, addedParkLeeOwnerTierV1: true, grantedOvertimeBulkUploadV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true, grantedNamHongBackupV1: true, grantedNamHongAdminV1: true, addedParkLeeOwnerTierV1: true, grantedOvertimeBulkUploadV1: true, grantedProxyAnyDateV1: true };
     await saveData();
   }
 }
@@ -1446,9 +1461,9 @@ function renderRequestForm(main){
         <span id="cancel-edit-link" style="text-decoration:underline; cursor:pointer; margin-left:8px;">수정 취소</span>
       </div>
       `:''}
-      ${state.me.canCancelApproved ? `
+      ${(state.me.canCancelApproved || state.me.canProxyAnyDate) ? `
       <div class="field">
-        <label>신청 대상자 <span style="font-weight:600; color:var(--muted); font-size:11.5px;">승인취소 권한자는 타인 명의로도 신청할 수 있어요</span></label>
+        <label>신청 대상자 <span style="font-weight:600; color:var(--muted); font-size:11.5px;">승인취소 권한자·대리기안 권한자는 타인 명의로도 신청할 수 있어요</span></label>
         <select id="target-employee">
           ${state.data.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko')).map(e=>`
             <option value="${e.id}" ${(state.formTargetEmployeeId||state.me.id)===e.id?'selected':''}>${e.name}${e.id===state.me.id?' (본인)':''} · ${e.team||''}</option>
@@ -1511,7 +1526,7 @@ function renderRequestForm(main){
       }
     }
     const t = LEAVE_TYPES[type];
-    const targetEmp = (state.me.canCancelApproved && state.formTargetEmployeeId) ? (empById(state.formTargetEmployeeId)||state.me) : state.me;
+    const targetEmp = ((state.me.canCancelApproved || state.me.canProxyAnyDate) && state.formTargetEmployeeId) ? (empById(state.formTargetEmployeeId)||state.me) : state.me;
     let startDate, endDate, halfType=null, splitStart=null, splitEnd=null, otStart=null, otEnd=null, otMinutes=null, familySub=null, subType=null, targetClient=null, days=0;
     if(type==='half'){
       startDate = endDate = document.getElementById('single-date').value;
@@ -1658,7 +1673,7 @@ function renderRequestForm(main){
 function renderDateFields(){
   const box = document.getElementById('date-fields');
   const type = state.formType;
-  const targetEmp = (state.me.canCancelApproved && state.formTargetEmployeeId) ? (empById(state.formTargetEmployeeId)||state.me) : state.me;
+  const targetEmp = ((state.me.canCancelApproved || state.me.canProxyAnyDate) && state.formTargetEmployeeId) ? (empById(state.formTargetEmployeeId)||state.me) : state.me;
   const remain = targetEmp.annualTotal - annualUsed(targetEmp.id);
   const remainHours = daysToHours(remain);
   if(type==='half'){
@@ -2172,6 +2187,12 @@ function renderOvertimeStatus(main){
     .sort((a,b)=>b.createdAt-a.createdAt);
 
   const arrow = (col)=>sortArrowFor(state.overtimeStatusSortCol, state.overtimeStatusSortDir, col);
+
+  const now = new Date();
+  const curYm = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const monthReqs = state.data.requests.filter(r=>r.type==='overtime' && r.status==='approved' && r.startDate && r.startDate.startsWith(curYm));
+  const monthMins = monthReqs.reduce((sum,r)=>sum+(r.otMinutes||0),0);
+
   main.innerHTML = `
     <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
       <div>
@@ -2180,6 +2201,17 @@ function renderOvertimeStatus(main){
         <p class="page-desc">본인, 본인이 속한 팀의 팀장/지점장, 연장근무 최종승인자, 시스템 관리자, 전체열람 권한자만 조회할 수 있어요. 표 제목을 클릭하면 그 기준으로 정렬돼요. 본인은 항상 맨 위예요.</p>
       </div>
       ${visible.length>1 ? `<button class="btn btn-ghost btn-sm" id="export-overtime-excel" style="width:auto; white-space:nowrap;">⬇ 엑셀 다운로드</button>`:''}
+    </div>
+    <div class="card" style="margin-bottom:20px; display:flex; gap:32px; align-items:center; flex-wrap:wrap;">
+      <div>
+        <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:4px;">${now.getFullYear()}년 ${now.getMonth()+1}월 · 회사 전체 연장근무</div>
+        <div style="font-size:22px; font-weight:800; color:var(--brand); font-family:var(--mono);">${formatMinutes(monthMins)}</div>
+      </div>
+      <div style="width:1px; align-self:stretch; background:var(--line);"></div>
+      <div>
+        <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:4px;">총 건수</div>
+        <div style="font-size:22px; font-weight:800; color:var(--ink); font-family:var(--mono);">${monthReqs.length}건</div>
+      </div>
     </div>
     ${state.me.canBulkUploadOvertime ? `
     <div class="card" style="margin-bottom:20px; border-color:var(--brand);">
