@@ -1026,6 +1026,17 @@ async function saveData(){
     return true;
   }catch(e){ console.error('save failed', e); showToast('저장에 실패했어요. 다시 시도해주세요.'); return false; }
 }
+// 이메일 알림 발송 (실패해도 화면 동작에 영향 없도록 조용히 무시)
+async function sendNotificationEmail(to, subject, text){
+  try{
+    const res = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, text })
+    });
+    if(!res.ok){ console.error('email send failed', await res.text()); }
+  }catch(e){ console.error('email send error', e); }
+}
 async function loadIdentity(){
   try{
     const res = await window.storage.get(PERSONAL_KEY, false);
@@ -1670,6 +1681,15 @@ function renderRequestForm(main){
     state.data.requests.push(newReq);
     await saveData();
     showToast(showToastMsg);
+
+    // 이메일 알림: 모든 신청은 관리 이메일로, 영업지원팀 연차는 정나은에게도 별도 발송
+    const dateLabelForEmail = startDate===endDate? startDate : `${startDate} ~ ${endDate}`;
+    const emailBody = `${targetEmp.name}(${targetEmp.team||''}) 님이 [${t.label}] 신청을 등록했어요.\n날짜: ${dateLabelForEmail}\n사유: ${reason||'(없음)'}`;
+    sendNotificationEmail('theroadhome@naver.com', `[HR Portal] ${targetEmp.name}님의 ${t.label} 신청`, emailBody);
+    if(type==='annual' && targetEmp.team==='영업지원팀'){
+      sendNotificationEmail('nicheta73@naver.com', `[HR Portal] ${targetEmp.name}님의 연차 신청 - 결재 필요`, emailBody);
+    }
+
     state.view='my-requests';
     renderApp();
   };
@@ -2799,6 +2819,12 @@ function renderApprovals(main){
           r.status='pending_hr';
           await saveData();
           showToast(`${empName(r.employeeId)}님의 연장근무를 1차 승인했어요. ${finalApproverName()}님의 최종 승인이 남았어요.`);
+          const owner = empById(r.employeeId);
+          sendNotificationEmail(
+            'nicheta73@naver.com',
+            `[HR Portal] ${empName(r.employeeId)}님의 연장근무 최종 승인 필요`,
+            `${empName(r.employeeId)}(${owner? owner.team||'':''}) 님의 연장근무가 ${empName(state.me.id)}님의 1차 승인을 받아, 최종 승인이 필요해요.\n날짜: ${r.startDate}\n시간: ${r.otStart}~${r.otEnd}\n사유: ${r.reason||'(없음)'}`
+          );
         }
       }else{
         r.status='approved'; r.approverId=state.me.id; r.approvedAt=Date.now();
