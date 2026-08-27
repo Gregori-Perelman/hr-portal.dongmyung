@@ -1,11 +1,17 @@
 import os
 import json
+import smtplib
+from email.mime.text import MIMEText
 import psycopg2
 from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
+
+# 네이버 메일 발송 계정 정보: Render 대시보드의 Environment 탭에서 설정 (코드에는 절대 값 자체를 넣지 않음)
+NAVER_EMAIL_USER = os.environ.get("NAVER_EMAIL_USER")
+NAVER_EMAIL_APP_PASSWORD = os.environ.get("NAVER_EMAIL_APP_PASSWORD")
 
 
 def get_conn():
@@ -99,6 +105,34 @@ def storage_list():
 @app.route("/healthz")
 def healthz():
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/send-email", methods=["POST"])
+def send_email():
+    body = request.get_json(force=True, silent=True) or {}
+    to_addr = body.get("to")
+    subject = body.get("subject", "")
+    text = body.get("text", "")
+
+    if not to_addr:
+        return jsonify({"error": "to is required"}), 400
+    if not NAVER_EMAIL_USER or not NAVER_EMAIL_APP_PASSWORD:
+        return jsonify({"error": "email not configured on server"}), 500
+
+    try:
+        msg = MIMEText(text, _charset="utf-8")
+        msg["Subject"] = subject
+        msg["From"] = NAVER_EMAIL_USER
+        msg["To"] = to_addr
+
+        with smtplib.SMTP("smtp.naver.com", 587) as server:
+            server.starttls()
+            server.login(NAVER_EMAIL_USER, NAVER_EMAIL_APP_PASSWORD)
+            server.sendmail(NAVER_EMAIL_USER, [to_addr], msg.as_string())
+
+        return jsonify({"sent": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 init_db()
