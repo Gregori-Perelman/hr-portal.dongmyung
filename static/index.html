@@ -1317,13 +1317,14 @@ function renderApp(){
 
 function renderMain(){
   const main = document.getElementById('main');
-  main.style.maxWidth = (state.view==='calendar') ? '75%' : '';
+  main.style.maxWidth = (state.view==='calendar' || state.view==='overtime-calendar') ? '75%' : '';
   if(state.view==='dashboard') return renderDashboard(main);
   if(state.view==='request') return renderRequestForm(main);
   if(state.view==='my-requests') return renderMyRequests(main);
   if(state.view==='leave-status') return renderLeaveStatus(main);
   if(state.view==='leave-status-detail') return renderLeaveStatusDetail(main);
   if(state.view==='overtime-status') return renderOvertimeStatus(main);
+  if(state.view==='overtime-calendar') return renderOvertimeCalendar(main);
   if(state.view==='approval-log') return renderApprovalLog(main);
   if(state.view==='deletion-log') return renderDeletionLog(main);
   if(state.view==='approvals') return renderApprovals(main);
@@ -1464,7 +1465,7 @@ function renderOvertimeMiniCalendar(container, visibleIds){
       ${dayReqs.length? `<span style="position:absolute; bottom:-1px; right:-1px; background:var(--stamp-red); color:#fff; border-radius:50%; width:13px; height:13px; font-size:8px; display:flex; align-items:center; justify-content:center;">${dayReqs.length}</span>`:''}
     </div>`;
   }
-  html += `</div><div class="hint">숫자는 해당 날짜에 연장근무한 인원 수예요. 날짜를 클릭하면 회사 캘린더로 이동해요.</div>`;
+  html += `</div><div class="hint">숫자는 해당 날짜에 연장근무한 인원 수예요. 날짜를 클릭하면 연장근무 캘린더로 이동해요.</div>`;
   container.innerHTML = html;
   document.getElementById('ot-minical-prev').onclick = ()=>{
     state.otMiniCalMonth--;
@@ -1478,9 +1479,9 @@ function renderOvertimeMiniCalendar(container, visibleIds){
   };
   container.querySelectorAll('[data-ot-minical-date]').forEach(el=>{
     el.onclick = ()=>{
-      state.calYear = year;
-      state.calMonth = month;
-      state.view = 'calendar';
+      state.otCalYear = year;
+      state.otCalMonth = month;
+      state.view = 'overtime-calendar';
       renderApp();
     };
   });
@@ -3129,6 +3130,121 @@ function showDayDetailModal(dateStr){
       </div>
       <div class="req-list" style="max-height:60vh; overflow-y:auto;">
         ${dayReqs.length? dayReqs.map(r=>reqCardHTML(r,false,false)).join('') : `<div class="empty">이 날짜에 등록된 근태가 없어요.</div>`}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = ()=> overlay.remove();
+  document.getElementById('day-modal-close').onclick = close;
+  overlay.onclick = (e)=>{ if(e.target===overlay) close(); };
+}
+
+/* ---------------- OVERTIME CALENDAR (연장근무 전용 달력) ---------------- */
+function renderOvertimeCalendar(main){
+  const today = new Date();
+  if(state.otCalYear==null){
+    state.otCalYear = state.otMiniCalYear!=null ? state.otMiniCalYear : today.getFullYear();
+    state.otCalMonth = state.otMiniCalMonth!=null ? state.otMiniCalMonth : today.getMonth();
+  }
+  const visible = visibleEmployeesForStatus(state.me).filter(e=>!isOwnerTierEmp(e));
+  const visibleIds = new Set(visible.map(e=>e.id));
+
+  main.innerHTML = `
+    <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+      <div>
+        <div class="page-eyebrow">Overtime Calendar</div>
+        <h1 class="page-title">연장근무 캘린더</h1>
+        <p class="page-desc">날짜별로 누가 몇 시간 연장근무했는지 확인하세요. 본인, 팀장/지점장, 연장근무 최종승인자, 관리자, 전체열람 권한자만 볼 수 있어요.</p>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="otcal-back" style="width:auto; white-space:nowrap;">← 연장근무 현황으로</button>
+    </div>
+    <div class="card">
+      <div class="cal-head">
+        <div class="cal-nav">
+          <button class="btn btn-ghost btn-sm" id="otcal-prev" style="width:auto;">‹ 이전</button>
+          <div class="cal-month">${state.otCalYear}.${String(state.otCalMonth+1).padStart(2,'0')}</div>
+          <button class="btn btn-ghost btn-sm" id="otcal-next" style="width:auto;">다음 ›</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="otcal-today" style="width:auto;">오늘</button>
+      </div>
+      <div class="cal-grid" id="otcal-body"></div>
+    </div>
+  `;
+  document.getElementById('otcal-back').onclick = ()=>{ state.view='overtime-status'; renderApp(); };
+  document.getElementById('otcal-prev').onclick = ()=>{ shiftOtCalMonth(-1); renderOvertimeCalendar(main); };
+  document.getElementById('otcal-next').onclick = ()=>{ shiftOtCalMonth(1); renderOvertimeCalendar(main); };
+  document.getElementById('otcal-today').onclick = ()=>{ const n=new Date(); state.otCalYear=n.getFullYear(); state.otCalMonth=n.getMonth(); renderOvertimeCalendar(main); };
+  buildOtCalGrid(visibleIds);
+}
+function shiftOtCalMonth(delta){
+  let m = state.otCalMonth + delta, y = state.otCalYear;
+  if(m<0){ m=11; y--; } if(m>11){ m=0; y++; }
+  state.otCalMonth=m; state.otCalYear=y;
+}
+function buildOtCalGrid(visibleIds){
+  const body = document.getElementById('otcal-body');
+  const year=state.otCalYear, month=state.otCalMonth;
+  const first = new Date(year,month,1);
+  const startOffset = first.getDay();
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const prevDays = new Date(year, month, 0).getDate();
+  const now = new Date();
+  const t = LEAVE_TYPES.overtime;
+  let html = ['일','월','화','수','목','금','토'].map(d=>`<div class="cal-dow">${d}</div>`).join('');
+
+  const totalCells = Math.ceil((startOffset+daysInMonth)/7)*7;
+  for(let i=0;i<totalCells;i++){
+    const cellIndex = i - startOffset + 1;
+    let dateObj, otherMonth=false;
+    if(cellIndex<1){ dateObj=new Date(year, month-1, prevDays+cellIndex); otherMonth=true; }
+    else if(cellIndex>daysInMonth){ dateObj=new Date(year, month+1, cellIndex-daysInMonth); otherMonth=true; }
+    else { dateObj=new Date(year, month, cellIndex); }
+    const dateStr = fmtDate(dateObj);
+    const isToday = dateStr===fmtDate(now);
+    const dow = dateObj.getDay();
+    const holiday = isHoliday(dateStr);
+    let numColor = 'var(--ink-soft)';
+    if(dow===0) numColor = 'var(--stamp-red)';
+    if(dow===6) numColor = 'var(--sat-blue)';
+    if(holiday) numColor = 'var(--stamp-red)';
+    // 실제 연장근무한 날짜 기준(급여상 이월 여부와 무관)
+    const dayReqs = state.data.requests.filter(r=> r.type==='overtime' && r.status!=='rejected' && r.status!=='cancelled' && visibleIds.has(r.employeeId) && r.startDate===dateStr);
+    html += `<div class="cal-cell ${otherMonth?'other-month':''} ${isToday?'today':''}" data-otcal-date="${dateStr}" style="cursor:pointer;">
+      <div class="cal-daynum" style="color:${numColor}; font-weight:${holiday?'800':'600'};">${dateObj.getDate()}${holiday? ` <span style="font-size:9px; font-weight:700;">${state.data.holidays.find(h=>h.date===dateStr).label}</span>`:''}</div>
+      ${dayReqs.slice(0,3).map(r=>{
+        const opacity = (r.status==='pending'||r.status==='pending_hr')? '0.55':'1';
+        return `<div class="cal-tag" style="background:${t.color}; color:#fff; opacity:${opacity};">${empName(r.employeeId)} · ${formatMinutes(r.otMinutes)}${r.carryToNextMonth? ' (이월)':''}</div>`;
+      }).join('')}
+      ${dayReqs.length>3? `<div class="cal-tag" style="background:var(--gray-soft); color:var(--ink-soft);">+${dayReqs.length-3}명</div>`:''}
+    </div>`;
+  }
+  body.innerHTML = html;
+  document.querySelectorAll('.cal-cell[data-otcal-date]').forEach(cell=>{
+    cell.onclick = ()=> showOtDayDetailModal(cell.dataset.otcalDate, visibleIds);
+  });
+}
+function showOtDayDetailModal(dateStr, visibleIds){
+  const old = document.getElementById('day-detail-modal');
+  if(old) old.remove();
+  const dayReqs = state.data.requests.filter(r=> r.type==='overtime' && r.status!=='rejected' && r.status!=='cancelled' && visibleIds.has(r.employeeId) && r.startDate===dateStr);
+  const holiday = isHoliday(dateStr);
+  const holidayLabel = holiday? state.data.holidays.find(h=>h.date===dateStr).label : null;
+  const d = parseDate(dateStr);
+  const dowLabel = ['일','월','화','수','목','금','토'][d.getDay()];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'day-detail-modal';
+  overlay.innerHTML = `
+    <div class="modal-box" style="max-width:520px; text-align:left;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+        <div>
+          <div style="font-family:var(--mono); font-size:13px; color:var(--muted);">${dateStr} (${dowLabel})${holidayLabel? ` · ${holidayLabel}`:''}</div>
+          <div style="font-weight:800; font-size:18px;">이 날짜의 연장근무</div>
+        </div>
+        <button class="btn btn-sm btn-ghost" id="day-modal-close" style="width:auto;">닫기</button>
+      </div>
+      <div class="req-list" style="max-height:60vh; overflow-y:auto;">
+        ${dayReqs.length? dayReqs.map(r=>reqCardHTML(r,false,false)).join('') : `<div class="empty">이 날짜에 등록된 연장근무가 없어요.</div>`}
       </div>
     </div>`;
   document.body.appendChild(overlay);
