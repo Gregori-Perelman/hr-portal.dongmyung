@@ -660,6 +660,8 @@ let state = {
   view: 'dashboard',
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
+  otStatusMonth: new Date().getMonth(),
+  otStatusYear: new Date().getFullYear(),
   formType: 'annual',
   formHalf: 'am',
   splitStart: 12,
@@ -1459,11 +1461,11 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel,
       ${r.status==='cancelled'? `<div class="req-reason" style="color:var(--stamp-red);">승인 후 취소됨 (처리: ${empName(r.cancelledBy)})</div>`:''}
       ${r.type==='overtime' && r.status==='approved' ? `<div class="req-reason">1차 승인: ${empName(r.teamApproverId)} · 최종 승인: ${empName(r.hrApproverId)}</div>`:''}
       ${r.type==='overtime' && r.status==='pending_hr' && r.teamApproverId ? `<div class="req-reason">1차 승인: ${empName(r.teamApproverId)}</div>`:''}
-      ${r.type==='overtime' && r.carryToNextMonth ? `<div class="req-reason" style="color:var(--amber);">📅 ${ymLabel(overtimeEffectiveYm(r))} 합계로 이월 처리됨</div>`:''}
-      ${r.autoApproved? `<div class="req-reason" style="color:var(--green);">⚡ 자동승인 — 기안자가 팀장/지점장/부사장이라 별도 결재 없이 처리됨</div>`:''}
-      ${r.noApprovalNeeded? `<div class="req-reason" style="color:#1C8FC7;">${t.icon} ${t.label}은(는) 결재 없이 신청 즉시 등록돼요</div>`:''}
-      ${r.bulkImported? `<div class="req-reason" style="color:var(--muted);">📥 엑셀로 일괄 반영된 기록이에요 (사후신청 아님)</div>`:''}
-      ${r.filedBy? `<div class="req-reason" style="color:var(--muted);">✍️ ${empName(r.filedBy)}님이 대리로 기안했어요</div>`:''}
+      ${r.type==='overtime' && r.carryToNextMonth ? `<div class="req-reason" style="color:var(--amber);">📅 ${ymLabel(overtimeEffectiveYm(r))} 이월</div>`:''}
+      ${r.autoApproved? `<div class="req-reason" style="color:var(--green);">⚡ 자동승인</div>`:''}
+      ${r.noApprovalNeeded? `<div class="req-reason" style="color:#1C8FC7;">무결재 즉시등록</div>`:''}
+      ${r.bulkImported? `<div class="req-reason" style="color:var(--muted);">📥 일괄상신</div>`:''}
+      ${r.filedBy? `<div class="req-reason" style="color:var(--muted);">✍️ 대리기안: ${empName(r.filedBy)}</div>`:''}
       ${note? `<div class="req-reason" style="color:var(--amber);">${note}</div>`:''}
     </div>
     ${showApproverActions && (r.status==='pending'||r.status==='pending_hr') ? `
@@ -1483,7 +1485,7 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel,
       <button class="btn btn-sm btn-danger" data-admin-cancel="${r.id}" style="margin-left:8px;">승인 취소(철회)</button>
     `:''}
     ${showCarryOverToggle && r.type==='overtime' && r.status==='approved' ? `
-      <button class="btn btn-sm btn-ghost" data-toggle-carryover="${r.id}" style="margin-left:8px;">${r.carryToNextMonth? '이월 취소':'다음달로 이월'}</button>
+      <button class="btn btn-sm btn-ghost" data-toggle-carryover="${r.id}" style="width:auto; white-space:nowrap; margin-left:8px;">${r.carryToNextMonth? '이월 취소':'다음달로 이월'}</button>
     `:''}
   </div>`;
 }
@@ -2250,10 +2252,13 @@ function renderOvertimeStatus(main){
   const arrow = (col)=>sortArrowFor(state.overtimeStatusSortCol, state.overtimeStatusSortDir, col);
 
   const now = new Date();
-  const curYm = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
-  const curYear = String(now.getFullYear());
+  const selMonth = state.otStatusMonth!=null ? state.otStatusMonth : now.getMonth();
+  const selYear = state.otStatusYear!=null ? state.otStatusYear : now.getFullYear();
+  const selYm = selYear+'-'+String(selMonth+1).padStart(2,'0');
+  const curYear = String(selYear); // 선택된 월이 속한 연도 기준 연간 합계
+  const isCurMonth = (selYear===now.getFullYear() && selMonth===now.getMonth());
   // 이월 처리된 건은 실제 근무일이 아니라 이월된 달(overtimeEffectiveYm) 기준으로 그 달 합계에 잡힘
-  const monthReqs = state.data.requests.filter(r=>r.type==='overtime' && r.status==='approved' && overtimeEffectiveYm(r)===curYm);
+  const monthReqs = state.data.requests.filter(r=>r.type==='overtime' && r.status==='approved' && overtimeEffectiveYm(r)===selYm);
   const monthMins = monthReqs.reduce((sum,r)=>sum+(r.otMinutes||0),0);
   const yearReqs = state.data.requests.filter(r=>r.type==='overtime' && r.status==='approved' && overtimeEffectiveYm(r).startsWith(curYear));
   const yearMins = yearReqs.reduce((sum,r)=>sum+(r.otMinutes||0),0);
@@ -2273,9 +2278,15 @@ function renderOvertimeStatus(main){
       <button class="btn btn-ghost btn-sm" data-sort-col="name" style="width:auto; font-size:12px;">이름${arrow('name')}</button>
       <button class="btn btn-ghost btn-sm" data-sort-col="team" style="width:auto; font-size:12px;">팀${arrow('team')}</button>
     </div>
+    <div class="card" style="margin-bottom:14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" id="ot-status-prev" style="width:auto;">‹ 지난달</button>
+      <div style="font-weight:800; font-size:15px; min-width:84px; text-align:center;">${selYear}년 ${selMonth+1}월</div>
+      <button class="btn btn-ghost btn-sm" id="ot-status-next" style="width:auto;">다음달 ›</button>
+      ${!isCurMonth? `<button class="btn btn-ghost btn-sm" id="ot-status-today" style="width:auto; margin-left:4px;">이번달</button>`:''}
+    </div>
     <div class="card" style="margin-bottom:20px; display:flex; gap:32px; align-items:center; flex-wrap:wrap;">
       <div>
-        <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:4px;">${now.getFullYear()}년 ${now.getMonth()+1}월 · 회사 전체 연장근무</div>
+        <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:4px;">회사 전체 연장근무</div>
         <div style="font-size:22px; font-weight:800; color:var(--brand); font-family:var(--mono);">${formatMinutes(monthMins)}</div>
       </div>
       <div style="width:1px; align-self:stretch; background:var(--line);"></div>
@@ -2293,8 +2304,7 @@ function renderOvertimeStatus(main){
     <div class="card" style="margin-bottom:20px; border-color:var(--brand);">
       <div class="section-title">📥 연장근무 엑셀 일괄 업로드</div>
       <p class="hint" style="margin-bottom:14px;">
-        엑셀 열 구성: <strong>사번, 이름(참고용), 날짜, 시작시간, 종료시간, 사유</strong> (첫 행은 제목행. 실제 매칭은 <strong>사번 기준</strong>이에요 — 이름은 헷갈리지 않게 확인용으로만 써주세요. 동명이인이 있어서 이름만으로는 구분이 안 돼요. <strong>양식의 A열(사번)은 텍스트 서식이라 "07"처럼 입력해도 그대로 유지되고, A열에 사번을 입력하면 B열(이름)이 자동으로 채워져요</strong>(엑셀에서 열어야 작동해요). 시간은 HH:MM 형식, <strong>30분 단위만 가능</strong>해요 — 예: 18:00, 18:30. 그 외 분 단위는 건너뛰어요). 업로드된 건은
-        <strong>결재 없이 바로 승인 완료</strong>로 등록돼요. 여러 명·여러 건을 한 번에 올릴 때 쓰세요.
+        열 구성: <strong>사번·이름(참고)·날짜·시작·종료·사유</strong> · 매칭은 <strong>사번 기준</strong> · 시간은 <strong>30분 단위만</strong> 가능(18:00, 18:30) · 업로드 즉시 <strong>결재 없이 승인 완료</strong>
       </p>
       <button class="btn btn-ghost btn-sm" id="download-overtime-template" style="width:auto; margin-bottom:14px;">⬇ 엑셀 업로드 양식 다운로드</button>
       <input type="file" id="overtime-excel-input" accept=".xlsx,.xls">
@@ -2363,6 +2373,10 @@ function renderOvertimeStatus(main){
     else{ state.overtimeStatusSortCol = col; state.overtimeStatusSortDir = 'asc'; }
     renderOvertimeStatus(main);
   });
+  document.getElementById('ot-status-prev').onclick = ()=>{ shiftOtStatusMonth(-1); renderOvertimeStatus(main); };
+  document.getElementById('ot-status-next').onclick = ()=>{ shiftOtStatusMonth(1); renderOvertimeStatus(main); };
+  const otStatusTodayBtn = document.getElementById('ot-status-today');
+  if(otStatusTodayBtn) otStatusTodayBtn.onclick = ()=>{ const n=new Date(); state.otStatusYear=n.getFullYear(); state.otStatusMonth=n.getMonth(); renderOvertimeStatus(main); };
   if(state.me.canCancelApproved){
     document.querySelectorAll('[data-admin-cancel]').forEach(btn=>{
       btn.onclick = async ()=>{
@@ -2965,6 +2979,11 @@ function shiftMonth(delta){
   let m = state.calMonth + delta, y = state.calYear;
   if(m<0){ m=11; y--; } if(m>11){ m=0; y++; }
   state.calMonth=m; state.calYear=y;
+}
+function shiftOtStatusMonth(delta){
+  let m = state.otStatusMonth + delta, y = state.otStatusYear;
+  if(m<0){ m=11; y--; } if(m>11){ m=0; y++; }
+  state.otStatusMonth=m; state.otStatusYear=y;
 }
 function buildCalGrid(){
   const body = document.getElementById('cal-body');
