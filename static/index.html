@@ -466,7 +466,7 @@ const SEED_EMPLOYEES = [
   { empNo:'54', name:'구현',      team:'물류팀',      position:'팀장',  annualTotal:18 },
   { empNo:'05',  name:'김남홍',    team:'영업지원팀',  position:'팀원',  annualTotal:25, isFullViewer:true, canUploadRoster:true, canViewDetailLog:true, canBackupData:true, isAdmin:true, canBulkUploadOvertime:true, canProxyAnyDate:true, canCarryOverOvertime:true },
   { empNo:'13', name:'김성준YB',  team:'본사영업부',  position:'팀장',  annualTotal:24 },
-  { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true, canUploadRoster:true, canCancelApproved:true, canViewDetailLog:true, canBulkUploadOvertime:true, canProxyAnyDate:true },
+  { empNo:'40', name:'이동현',    team:'본사영업부',  position:'팀원',  annualTotal:16, isAdmin:true, canUploadRoster:true, canCancelApproved:true, canViewDetailLog:true, canBulkUploadOvertime:true, canProxyAnyDate:true, canCarryOverOvertime:true },
   { empNo:'26', name:'정태건',    team:'FA시스템팀',  position:'팀장',  annualTotal:18 },
   { empNo:'16', name:'강현동',    team:'물류팀',      position:'팀원',  annualTotal:23 },
   { empNo:'23', name:'여승현',    team:'물류팀',      position:'팀원',  annualTotal:21 },
@@ -1020,6 +1020,13 @@ async function loadData(){
         if(targets.includes(String(e.empNo).padStart(2,'0'))){ e.canCarryOverOvertime = true; }
       });
       state.data.grantedOvertimeCarryOverV1 = true;
+      await saveData();
+    }
+    if(!state.data.grantedOvertimeCarryOverV2){
+      // 이동현에게도 연장근무 이월 처리 권한 부여
+      const nh = state.data.employees.find(e=>String(e.empNo).padStart(2,'0')==='40');
+      if(nh){ nh.canCarryOverOvertime = true; }
+      state.data.grantedOvertimeCarryOverV2 = true;
       await saveData();
     }
     if(!state.data.deletionLog){
