@@ -1060,7 +1060,7 @@ async function loadData(){
         isBackdated: false, bulkImported: true, approverId: null
       });
     });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true, grantedNamHongBackupV1: true, grantedNamHongAdminV1: true, addedParkLeeOwnerTierV1: true, grantedOvertimeBulkUploadV1: true, grantedProxyAnyDateV1: true, fixedParkChoiJuneResetV1: true };
+    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true, grantedNamHongBackupV1: true, grantedNamHongAdminV1: true, addedParkLeeOwnerTierV1: true, grantedOvertimeBulkUploadV1: true, grantedProxyAnyDateV1: true, fixedParkChoiJuneResetV1: true, grantedOvertimeCarryOverV1: true, grantedOvertimeCarryOverV2: true };
     await saveData();
   }
 }
@@ -1905,7 +1905,7 @@ function renderDateFields(){
         <input type="date" id="family-start" min="${minAllowedDateStr()}" value="${todayStr()}">
       </div>
       <div class="hint" id="family-end-hint"></div>
-      <div class="hint">경조휴가는 <strong>발생 당일부터</strong> 계산돼요. 토요일도 일수에 포함되고, <strong>일요일만 계산에서 제외</strong>돼요. 연차에서 차감되지 않아요.</div>
+      <div class="hint"><strong>당일기산</strong>(신청일 당일부터 계산) · 일요일만 제외 · 연차 차감 없음</div>
     `;
     document.querySelectorAll('[data-familysub]').forEach(el=>{
       el.onclick = ()=>{ state.formFamilySub = el.dataset.familysub; renderDateFields(); };
@@ -1915,7 +1915,7 @@ function renderDateFields(){
       const requiredDays = FAMILY_SUBTYPES[state.formFamilySub].days;
       const endDate = computeFamilyEndDate(familyStartInp.value, requiredDays);
       document.getElementById('family-end-hint').innerHTML =
-        `자동 계산된 종료일: <strong>${endDate}</strong> (총 ${requiredDays}일, 일요일 제외)`;
+        `종료일: <strong>${endDate}</strong> (총 ${requiredDays}일 · 당일기산)`;
     };
     familyStartInp.onchange = updateFamilyHint;
     updateFamilyHint();
