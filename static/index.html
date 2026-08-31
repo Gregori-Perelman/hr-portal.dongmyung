@@ -1789,6 +1789,16 @@ function renderRequestForm(main){
     if(type==='annual' && targetEmp.team==='영업지원팀'){
       sendNotificationEmail('nicheta73@naver.com', `[HR Portal] ${targetEmp.name}님의 연차 신청 - 결재 필요`, emailBody);
     }
+    // 실제 결재를 처리해야 할 담당자에게도, 이메일이 등록돼 있으면 개별 발송
+    if(newReq.status==='pending' || newReq.status==='pending_hr'){
+      // pending_hr은 본인(팀장)이 1차를 자동승인하고 최종승인만 남은 경우라 최종승인자에게, 그 외엔 담당 팀장/지점장(없으면 최종승인자)에게
+      const dutyApprover = newReq.status==='pending_hr'
+        ? state.data.employees.find(e=>e.isHrApprover)
+        : (findTeamLeader(targetEmp.team) || state.data.employees.find(e=>e.isHrApprover));
+      if(dutyApprover && dutyApprover.email){
+        sendNotificationEmail(dutyApprover.email, `[HR Portal] ${targetEmp.name}님의 ${t.label} 신청 - 결재 필요`, emailBody);
+      }
+    }
 
     state.view='my-requests';
     renderApp();
@@ -2992,8 +3002,9 @@ function renderApprovals(main){
           await saveData();
           showToast(`${empName(r.employeeId)}님의 연장근무를 1차 승인했어요. ${finalApproverName()}님의 최종 승인이 남았어요.`);
           const owner = empById(r.employeeId);
+          const hrApproverEmp = state.data.employees.find(x=>x.isHrApprover);
           sendNotificationEmail(
-            'nicheta73@naver.com',
+            (hrApproverEmp && hrApproverEmp.email) ? hrApproverEmp.email : 'nicheta73@naver.com',
             `[HR Portal] ${empName(r.employeeId)}님의 연장근무 최종 승인 필요`,
             `${empName(r.employeeId)}(${owner? owner.team||'':''}) 님의 연장근무가 ${empName(state.me.id)}님의 1차 승인을 받아, 최종 승인이 필요해요.\n날짜: ${r.startDate}\n시간: ${r.otStart}~${r.otEnd}\n사유: ${r.reason||'(없음)'}`
           );
@@ -3377,7 +3388,7 @@ function renderMembers(main){
     </div>
     <div class="card" style="margin-bottom:20px;">
       <table class="members">
-        <thead><tr><th data-sort-col="empNo" style="cursor:pointer;">사번${sortArrowFor(state.membersSortCol, state.membersSortDir, 'empNo')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrowFor(state.membersSortCol, state.membersSortDir, 'name')}</th><th>팀</th><th>직책</th><th>권한</th><th>총연차</th><th>사용갯수</th><th>잔여연차</th><th></th></tr></thead>
+        <thead><tr><th data-sort-col="empNo" style="cursor:pointer;">사번${sortArrowFor(state.membersSortCol, state.membersSortDir, 'empNo')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrowFor(state.membersSortCol, state.membersSortDir, 'name')}</th><th>팀</th><th>이메일 <span style="font-weight:600; color:var(--muted); font-size:10.5px;">(결재 알림용)</span></th><th>직책</th><th>권한</th><th>총연차</th><th>사용갯수</th><th>잔여연차</th><th></th></tr></thead>
         <tbody id="members-body"></tbody>
       </table>
     </div>
@@ -3420,6 +3431,7 @@ function renderMembers(main){
       <td style="font-family:var(--mono); color:var(--ink-soft);">${e.empNo||''}</td>
       <td><strong>${e.name}</strong>${e.id===state.me.id?' <span style="color:var(--muted); font-size:11px;">(나)</span>':''}</td>
       <td><input type="text" class="balance-input" style="width:88px;" data-team="${e.id}" value="${e.team||''}"></td>
+      <td><input type="email" class="balance-input" style="width:160px;" data-email="${e.id}" value="${e.email||''}" placeholder="example@naver.com"></td>
       <td>
         <select data-position="${e.id}" style="padding:5px 6px; border-radius:7px; border:1.5px solid var(--line); font-size:12.5px;">
           <option value="팀원" ${e.position==='팀원'?'selected':''}>팀원</option>
@@ -3533,6 +3545,14 @@ function renderMembers(main){
       e.team = inp.value.trim();
       await saveData();
       renderMembers(main);
+    };
+  });
+  document.querySelectorAll('[data-email]').forEach(inp=>{
+    inp.onchange = async ()=>{
+      const e = empById(inp.dataset.email);
+      e.email = inp.value.trim();
+      await saveData();
+      showToast(e.email? `${e.name}님의 이메일을 저장했어요. 결재가 필요할 때 이 주소로 알림이 가요.` : `${e.name}님의 이메일을 비웠어요.`);
     };
   });
   document.querySelectorAll('[data-position]').forEach(sel=>{
