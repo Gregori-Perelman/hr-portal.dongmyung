@@ -2306,9 +2306,6 @@ function renderOvertimeStatus(main){
     state.me.id, overtimeGetters, state.overtimeStatusSortCol, state.overtimeStatusSortDir
   );
   const visibleIds = new Set(visible.map(e=>e.id));
-  const otReqs = state.data.requests
-    .filter(r=>r.type==='overtime' && visibleIds.has(r.employeeId))
-    .sort((a,b)=>b.createdAt-a.createdAt);
 
   const arrow = (col)=>sortArrowFor(state.overtimeStatusSortCol, state.overtimeStatusSortDir, col);
 
@@ -2318,6 +2315,11 @@ function renderOvertimeStatus(main){
   const selYm = selYear+'-'+String(selMonth+1).padStart(2,'0');
   const curYear = String(selYear); // 선택된 월이 속한 연도 기준 연간 합계
   const isCurMonth = (selYear===now.getFullYear() && selMonth===now.getMonth());
+
+  // 인원별 내역도 상단 요약과 같은 달(급여 기준월 = overtimeEffectiveYm) 것만 보여줌
+  const otReqs = state.data.requests
+    .filter(r=>r.type==='overtime' && visibleIds.has(r.employeeId) && overtimeEffectiveYm(r)===selYm)
+    .sort((a,b)=>b.createdAt-a.createdAt);
   // 이월 처리된 건은 실제 근무일이 아니라 이월된 달(overtimeEffectiveYm) 기준으로 그 달 합계에 잡힘
   const monthReqs = state.data.requests.filter(r=>r.type==='overtime' && r.status==='approved' && overtimeEffectiveYm(r)===selYm);
   const monthMins = monthReqs.reduce((sum,r)=>sum+(r.otMinutes||0),0);
@@ -2392,15 +2394,16 @@ function renderOvertimeStatus(main){
         const empReqs = otReqs.filter(r=>r.employeeId===e.id);
         const empApproved = empReqs.filter(r=>r.status==='approved');
         const approvedMins = empApproved.reduce((sum,r)=> sum + (r.otMinutes||0), 0);
-        // 월별 합계(급여 기준월 = overtimeEffectiveYm) 계산: 최근 달이 먼저 오도록 정렬
+        // 연간 합계·월별 합계는 선택된 달과 무관하게 그 사람의 전체 승인 내역 기준으로 계산
+        const empAllApproved = state.data.requests.filter(r=>r.type==='overtime' && r.employeeId===e.id && r.status==='approved');
         const byYm = {};
-        empApproved.forEach(r=>{
+        empAllApproved.forEach(r=>{
           const ym = overtimeEffectiveYm(r);
           if(!ym) return;
           byYm[ym] = (byYm[ym]||0) + (r.otMinutes||0);
         });
         const monthlyRows = Object.keys(byYm).sort((a,b)=>b.localeCompare(a));
-        const empYearMins = empApproved.filter(r=>overtimeEffectiveYm(r).startsWith(curYear)).reduce((sum,r)=>sum+(r.otMinutes||0),0);
+        const empYearMins = empAllApproved.filter(r=>overtimeEffectiveYm(r).startsWith(curYear)).reduce((sum,r)=>sum+(r.otMinutes||0),0);
         return `
         <details class="card" style="margin-bottom:14px; padding:16px 20px; border:1.5px solid var(--line); box-shadow:0 1px 3px rgba(0,0,0,0.04);">
           <summary style="cursor:pointer; font-weight:800; font-size:14.5px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
