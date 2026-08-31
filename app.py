@@ -1,7 +1,6 @@
 import os
 import json
-import smtplib
-from email.mime.text import MIMEText
+import requests
 import psycopg2
 from flask import Flask, request, jsonify, send_from_directory
 
@@ -9,9 +8,12 @@ app = Flask(__name__, static_folder="static", static_url_path="")
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# 네이버 메일 발송 계정 정보: Render 대시보드의 Environment 탭에서 설정 (코드에는 절대 값 자체를 넣지 않음)
-NAVER_EMAIL_USER = os.environ.get("NAVER_EMAIL_USER")
-NAVER_EMAIL_APP_PASSWORD = os.environ.get("NAVER_EMAIL_APP_PASSWORD")
+# 브레보(Brevo) 메일 발송 정보: Render 대시보드의 Environment 탭에서 설정 (코드에는 절대 값 자체를 넣지 않음)
+# BREVO_API_KEY: 브레보 SMTP & API > API Keys 에서 발급받은 키 (xkeysib- 로 시작)
+# BREVO_SENDER_EMAIL: 브레보 Senders 메뉴에서 인증 완료한 발신 이메일 주소
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY")
+BREVO_SENDER_EMAIL = os.environ.get("BREVO_SENDER_EMAIL")
+BREVO_SENDER_NAME = os.environ.get("BREVO_SENDER_NAME", "HR Portal")
 
 
 def get_conn():
@@ -116,20 +118,27 @@ def send_email():
 
     if not to_addr:
         return jsonify({"error": "to is required"}), 400
-    if not NAVER_EMAIL_USER or not NAVER_EMAIL_APP_PASSWORD:
+    if not BREVO_API_KEY or not BREVO_SENDER_EMAIL:
         return jsonify({"error": "email not configured on server"}), 500
 
     try:
-        msg = MIMEText(text, _charset="utf-8")
-        msg["Subject"] = subject
-        msg["From"] = NAVER_EMAIL_USER
-        msg["To"] = to_addr
-
-        with smtplib.SMTP("smtp.naver.com", 587) as server:
-            server.starttls()
-            server.login(NAVER_EMAIL_USER, NAVER_EMAIL_APP_PASSWORD)
-            server.sendmail(NAVER_EMAIL_USER, [to_addr], msg.as_string())
-
+        resp = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "api-key": BREVO_API_KEY,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            json={
+                "sender": {"email": BREVO_SENDER_EMAIL, "name": BREVO_SENDER_NAME},
+                "to": [{"email": to_addr}],
+                "subject": subject,
+                "textContent": text,
+            },
+            timeout=10,
+        )
+        if resp.status_code >= 400:
+            return jsonify({"error": resp.text}), 500
         return jsonify({"sent": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
