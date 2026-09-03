@@ -426,9 +426,10 @@ const ETC_SUBTYPES = {
 };
 // 날짜가 겹치면 안 되는(하루를 실제로 차지하는) 유형들
 const BLOCKING_TYPES = ['annual', 'half', 'family', 'busytrip'];
-function findDateConflict(employeeId, startDate, endDate){
+function findDateConflict(employeeId, startDate, endDate, excludeId){
   return state.data.requests.find(r=>
     r.employeeId===employeeId &&
+    r.id!==excludeId &&
     r.status!=='rejected' && r.status!=='cancelled' &&
     BLOCKING_TYPES.includes(r.type) &&
     !(endDate < r.startDate || startDate > r.endDate)
@@ -1707,7 +1708,7 @@ function renderRequestForm(main){
     }
 
     if(BLOCKING_TYPES.includes(type)){
-      const conflict = findDateConflict(targetEmp.id, startDate, endDate);
+      const conflict = findDateConflict(targetEmp.id, startDate, endDate, state.editingRequestId);
       if(conflict){
         const ct = LEAVE_TYPES[conflict.type];
         const conflictDateLabel = conflict.startDate===conflict.endDate ? conflict.startDate : `${conflict.startDate} ~ ${conflict.endDate}`;
