@@ -12,4 +12,4 @@ jobs:
     steps:
       - name: Call backup-email endpoint
         run: |
-          curl -sf "https://hr-portal-dongmyung.onrender.com/api/backup-email?key=${{ secrets.BACKUP_SECRET }}"
+          curl -s -w "\nHTTP_STATUS:%{http_code}\n" "https://hr-portal-dongmyung.onrender.com/api/backup-email?key=${{ secrets.BACKUP_SECRET }}"
