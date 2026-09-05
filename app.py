@@ -203,7 +203,9 @@ def backup_email():
                 "textContent": "매일 자동으로 만들어지는 HR 포털 전체 데이터 백업이에요. 첨부된 JSON 파일을 안전한 곳에 보관해두세요.",
                 "attachment": [{
                     "content": attachment_b64,
-                    "name": f"hr-portal-backup_{date_stamp}.json",
+                    # 브레보는 첨부파일 확장자를 제한하는데 .json은 허용 목록에 없어서 .txt로 보냄
+                    # (내용은 그대로 JSON 텍스트라, 복구할 땐 파일 이름만 .json으로 바꿔서 올리면 돼요)
+                    "name": f"hr-portal-backup_{date_stamp}.txt",
                 }],
             },
             timeout=20,
