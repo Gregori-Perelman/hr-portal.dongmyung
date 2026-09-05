@@ -242,7 +242,8 @@
     text-align:left; font-size:11.5px; color:var(--muted); font-weight:700; text-transform:uppercase;
     letter-spacing:.04em; padding:8px 10px; border-bottom:1.5px solid var(--line);
   }
-  table.members td{ padding:11px 10px; border-bottom:1px solid var(--line); font-size:13.5px; }
+  table.members td{ padding:11px 10px; border-bottom:1px solid var(--line); font-size:13.5px; white-space:nowrap; }
+  table.members th{ white-space:nowrap; }
   .role-pill{ font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; }
   .toggle-btn{
     font-size:12px; padding:5px 10px; border-radius:7px; border:1.5px solid var(--line); background:#fff;
@@ -2096,6 +2097,7 @@ function renderLeaveStatus(main){
       ${visible.length>1 ? `<button class="btn btn-ghost btn-sm" id="export-leave-excel" style="width:auto; white-space:nowrap;">⬇ 엑셀 다운로드</button>`:''}
     </div>
     <div class="card" style="margin-bottom:20px;">
+      <div style="overflow-x:auto;">
       <table class="members">
         <thead><tr>
           <th data-sort-col="empNo">사번${arrow('empNo')}</th>
@@ -2123,6 +2125,7 @@ function renderLeaveStatus(main){
           }).join('')}
         </tbody>
       </table>
+      </div>
     </div>
     ${state.me.canCancelApproved ? `
     <div class="card">
@@ -3388,10 +3391,12 @@ function renderMembers(main){
       <button class="btn btn-ghost btn-sm" id="add-member" style="width:auto;">+ 구성원 추가</button>
     </div>
     <div class="card" style="margin-bottom:20px;">
+      <div style="overflow-x:auto;">
       <table class="members">
         <thead><tr><th data-sort-col="empNo" style="cursor:pointer;">사번${sortArrowFor(state.membersSortCol, state.membersSortDir, 'empNo')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrowFor(state.membersSortCol, state.membersSortDir, 'name')}</th><th>팀</th><th>이메일 <span style="font-weight:600; color:var(--muted); font-size:10.5px;">(결재 알림용)</span></th><th>직책</th><th>권한</th><th>총연차</th><th>사용갯수</th><th>잔여연차</th><th></th></tr></thead>
         <tbody id="members-body"></tbody>
       </table>
+      </div>
     </div>
     <div class="card">
       <div class="section-title">공휴일 관리 <span style="font-size:11.5px; color:var(--muted); font-weight:600;">연차 영업일 계산에서 자동으로 제외돼요</span></div>
