@@ -1,0 +1,15 @@
+name: Daily HR Portal Backup Email
+
+on:
+  schedule:
+    # 21:00 UTC = 06:00 KST(한국시간) 다음날
+    - cron: '0 21 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  send-backup-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call backup-email endpoint
+        run: |
+          curl -sf "https://hr-portal-dongmyung.onrender.com/api/backup-email?key=${{ secrets.BACKUP_SECRET }}"
