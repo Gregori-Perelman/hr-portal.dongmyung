@@ -2,8 +2,8 @@ name: Daily HR Portal Backup Email
 
 on:
   schedule:
-    # 21:00 UTC = 06:00 KST(한국시간) 다음날
-    - cron: '0 21 * * *'
+    # 15:00 UTC = 00:00 KST(한국시간, 자정) 다음날
+    - cron: '0 15 * * *'
   workflow_dispatch: {}
 
 jobs:
