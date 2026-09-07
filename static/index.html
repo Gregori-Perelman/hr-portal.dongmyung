@@ -1237,6 +1237,7 @@ function renderLogin(){
     await saveIdentity(match.id);
     state.me = match;
     state.view='dashboard';
+    recordActivity();
     renderApp();
   };
   document.getElementById('btn-login').onclick = doLogin;
@@ -3794,7 +3795,7 @@ async function init(){
   const myId = await loadIdentity();
   if(myId){
     const e = empById(myId);
-    if(e){ state.me = e; renderApp(); return; }
+    if(e){ state.me = e; recordActivity(); renderApp(); return; }
   }
   renderLogin();
 }
@@ -3828,6 +3829,43 @@ async function pollRefresh(){
   isPolling = false;
 }
 setInterval(pollRefresh, 12*60*1000);
+
+// ===== 자동 로그아웃 (10분간 아무 동작 없으면 로그아웃) =====
+// 마지막 활동 시각을 이 브라우저에만 기록해두고, 주기적으로 + 화면을 다시 볼 때마다 확인한다.
+// 휴대폰에서 탭을 백그라운드에 오래 두면 브라우저가 자바스크립트 실행을 멈춰버리는 경우가 있는데,
+// 그럴 때는 "화면이 다시 보이는 시점(visibilitychange)"에 경과 시간을 확인하기 때문에 놓치지 않는다.
+const IDLE_LOGOUT_MS = 10 * 60 * 1000;
+const LAST_ACTIVITY_KEY = 'hrportal-local:last-activity-v1';
+
+function recordActivity(){
+  try{ localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now())); }catch(e){}
+}
+
+function getLastActivity(){
+  try{
+    const v = localStorage.getItem(LAST_ACTIVITY_KEY);
+    return v ? parseInt(v, 10) : Date.now();
+  }catch(e){ return Date.now(); }
+}
+
+async function idleLogoutIfNeeded(){
+  if(!state.me) return;
+  const elapsed = Date.now() - getLastActivity();
+  if(elapsed < IDLE_LOGOUT_MS) return;
+  state.me = null;
+  try{ await window.storage.delete(PERSONAL_KEY, false); }catch(e){}
+  renderLogin();
+  const errBox = document.getElementById('login-error');
+  if(errBox) errBox.textContent = '10분간 사용하지 않아 자동으로 로그아웃됐어요. 다시 로그인해주세요.';
+}
+
+['mousedown','keydown','touchstart','click','scroll'].forEach(evt=>{
+  document.addEventListener(evt, recordActivity, {passive:true});
+});
+setInterval(idleLogoutIfNeeded, 30*1000);
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible'){ idleLogoutIfNeeded(); }
+});
 
 init();
 </script>
