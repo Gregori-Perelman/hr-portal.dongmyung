@@ -74,8 +74,42 @@ def storage_set(key):
     value = body.get("value")
     if value is None:
         return jsonify({"error": "value is required"}), 400
+
     conn = get_conn()
     cur = conn.cursor()
+
+    if key == BACKUP_STORAGE_KEY:
+        # 안전장치: 회사 전체 데이터(구성원/신청내역)를 담는 이 키만큼은, 지금 저장하려는 내용이
+        # 지금 서버에 있는 것보다 갑자기 훨씬 적어 보이면(=어딘가에서 실수로/버그로 통째로 초기화된
+        # 데이터를 덮어쓰려는 상황일 가능성이 큼) 저장을 거부한다. 브라우저 탭이 오래돼서 옛날 코드를
+        # 쓰고 있거나, 여러 명이 동시에 접속해서 생기는 사고까지 전부 여기서 막을 수 있다.
+        cur.execute("SELECT value FROM storage WHERE key = %s", (key,))
+        existing_row = cur.fetchone()
+        if existing_row is not None:
+            try:
+                existing_obj = json.loads(existing_row[0])
+                new_obj = json.loads(value)
+                existing_emp = len(existing_obj.get("employees") or [])
+                existing_req = len(existing_obj.get("requests") or [])
+                new_emp = len(new_obj.get("employees") or [])
+                new_req = len(new_obj.get("requests") or [])
+                emp_dropped = existing_emp >= 15 and new_emp < existing_emp * 0.7
+                req_dropped = existing_req >= 30 and new_req < existing_req * 0.7
+                if emp_dropped or req_dropped:
+                    cur.close()
+                    conn.close()
+                    return jsonify({
+                        "error": (
+                            "safety check failed: refusing to overwrite - "
+                            f"employees {existing_emp}->{new_emp}, requests {existing_req}->{new_req}. "
+                            "새로고침 후 다시 시도해주세요. 계속 이 오류가 뜨면 관리자에게 문의하세요."
+                        )
+                    }), 409
+            except Exception:
+                # 기존 값이나 새 값을 JSON으로 못 읽으면 안전장치 자체를 건너뛰고 평소대로 저장한다
+                # (여기서 저장을 막아버리면 오히려 정상적인 사용을 방해할 수 있음)
+                pass
+
     cur.execute(
         """
         INSERT INTO storage (key, value) VALUES (%s, %s)
