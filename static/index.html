@@ -824,9 +824,32 @@ function buildSeedEmployees(){
   }));
 }
 async function loadData(){
+  // 1단계: 서버에서 실제 데이터를 가져온다. 여기서 실패하면(서버가 잠깐 응답 못하는 경우 등)
+  // 절대로 회사 데이터를 새 것으로 초기화하면 안 되므로, 이 단계와 "기존 데이터 보정" 단계를 분리한다.
+  let isFreshInstall = false;
   try{
     const res = await window.storage.get(SHARED_KEY, true);
     state.data = JSON.parse(res.value);
+  }catch(e){
+    const isKeyNotFound = String((e && e.message) || '').includes('key not found');
+    if(!isKeyNotFound){
+      // 서버 연결/응답 문제로 추정됨: 기존 데이터를 절대 건드리지 않고 화면에 오류만 표시한 뒤 중단
+      console.error('load failed (network/server issue, NOT wiping data)', e);
+      document.getElementById('app').innerHTML = `<div class="login-wrap"><div class="card" style="max-width:420px; text-align:center;">
+        <div style="font-weight:800; font-size:15px; margin-bottom:10px; color:var(--stamp-red);">⚠️ 서버에 연결할 수 없어요</div>
+        <p class="hint" style="margin-bottom:16px;">잠시 후 자동으로 다시 시도할게요. (저장된 데이터는 안전해요)</p>
+        <button class="btn btn-primary" id="retry-load-btn" style="width:100%;">지금 다시 시도</button>
+      </div></div>`;
+      const retryBtn = document.getElementById('retry-load-btn');
+      if(retryBtn) retryBtn.onclick = ()=> location.reload();
+      setTimeout(()=> location.reload(), 5000);
+      throw e; // init()이 로그인 화면 등 이후 로직을 진행하지 않도록 여기서 멈춘다
+    }
+    // 정말로 서버에 데이터가 하나도 없는 경우(최초 설치)에만 새 데이터로 시작
+    isFreshInstall = true;
+    state.data = {};
+  }
+  try{
     if(!state.data.employees || state.data.employees.length===0){
       state.data.employees = buildSeedEmployees();
       await saveData();
@@ -1047,23 +1070,10 @@ async function loadData(){
       await saveData();
     }
   }catch(e){
-    const freshEmployees = buildSeedEmployees();
-    const freshRequests = [];
-    IMPORTED_LEAVE_BATCH_1.forEach(rec=>{
-      const emp = freshEmployees.find(x=>String(x.empNo).padStart(2,'0')===rec.empNo);
-      if(!emp) return;
-      freshRequests.push({
-        id: uid('req'), employeeId: emp.id, type: rec.type,
-        startDate: rec.startDate, endDate: rec.endDate,
-        halfType: rec.halfType||null, splitStart: rec.splitStart!=null?rec.splitStart:null, splitEnd: rec.splitEnd!=null?rec.splitEnd:null,
-        otStart:null, otEnd:null, otMinutes:null, familySub:null,
-        days: rec.days, reason:'엑셀 일괄 반영', status:'approved', rejectReason:'',
-        createdAt: Date.parse(rec.startDate) || Date.now(),
-        isBackdated: false, bulkImported: true, approverId: null
-      });
-    });
-    state.data = { employees: freshEmployees, requests: freshRequests, holidays: DEFAULT_HOLIDAYS_2026.slice(), deletionLog: [], orgVersion: ORG_VERSION, grantedNamHongFullView: true, empNoPadded: true, importedLeaveBatch3: true, defaultPasswordUpdatedV1: true, addedLeeDongwonAdmin: true, fixedDec26YearV1: true, grantedRosterUploadV1: true, restrictedCancelApprovedV1: true, grantedDetailLogV1: true, grantedOwnerViewV1: true, grantedOwnerSelfCancelV1: true, grantedNamHongBackupV1: true, grantedNamHongAdminV1: true, addedParkLeeOwnerTierV1: true, grantedOvertimeBulkUploadV1: true, grantedProxyAnyDateV1: true, fixedParkChoiJuneResetV1: true, grantedOvertimeCarryOverV1: true, grantedOvertimeCarryOverV2: true };
-    await saveData();
+    // 데이터 보정(마이그레이션) 중 예상치 못한 오류가 나더라도 절대로 기존 데이터를 새 것으로
+    // 덮어쓰지 않는다. (예전에는 여기서 회사 데이터를 통째로 초기화해 실제 데이터가 사라지는
+    // 사고가 있었음 — 재발 방지를 위해 오류만 기록하고 이미 불러온 데이터는 그대로 둔다.)
+    console.error('data migration step failed (data left as-is, NOT wiped)', e);
   }
 }
 async function saveData(){
