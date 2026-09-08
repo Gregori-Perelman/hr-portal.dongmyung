@@ -1134,12 +1134,13 @@ async function loadData(){
     }
     if(!state.data.addedJoinTradingV1){
       // 계열사 조인트레이딩 구성원 합류.
-      // 김혜환(원래 사번 37)은 기존 동명 구성원(대구지점 김규동)과 사번이 겹쳐서 로그인 충돌 방지를 위해 90번으로 새로 부여함.
-      // 김혜환 = 조인트레이딩 팀장 + 조인 범위 관리자(isCompanyAdmin) + 조인 연장근무 최종승인자(isHrApprover, 회사별로 분리됨).
+      // 김혜환(사번 37)은 예전에 테스트용으로 이미 등록되어 있던 기존 구성원이므로, 새로 만들지 않고
+      // 기존 레코드에 조인 범위 관리자(isCompanyAdmin) + 조인 연장근무 최종승인자(isHrApprover) 등
+      // 빠져있던 권한 필드만 추가로 부여함(기존 id/비밀번호는 그대로 유지).
       // 이경헌(대표이사) = 동명의 이동원과 동일하게 열람은 전체(조인 범위)지만 기안/승인은 하지 않는 오너급이며, 연차 개념 자체가 없음(annualTotal:null).
       // 김진현 = 혼자 일하는 포지션이라 타인 열람 권한이 전혀 없고, 역시 연차 개념이 없음(annualTotal:null).
       const jtRoster = [
-        { empNo:'90', name:'김혜환', position:'팀장',   annualTotal:19,   baseUsed:7,    isCompanyAdmin:true, isHrApprover:true, isFullViewer:true, canViewDetailLog:true },
+        { empNo:'37', name:'김혜환', position:'팀장',   annualTotal:19,   baseUsed:7,    isCompanyAdmin:true, isHrApprover:true, isFullViewer:true, canViewDetailLog:true },
         { empNo:'24', name:'김소은', position:'팀원',   annualTotal:17,   baseUsed:10.5 },
         { empNo:'15', name:'이주연', position:'팀원',   annualTotal:15,   baseUsed:5.5 },
         { empNo:'30', name:'서다은', position:'팀원',   annualTotal:16,   baseUsed:5.5 },
@@ -1151,7 +1152,21 @@ async function loadData(){
         { empNo:'51', name:'김진현', position:'팀원',   annualTotal:null, baseUsed:0 },
       ];
       for(const r of jtRoster){
-        if(state.data.employees.some(e=>String(e.empNo).padStart(2,'0')===r.empNo)) continue; // 이미 있으면 건너뜀(재실행 안전)
+        const existing = state.data.employees.find(e=>String(e.empNo).padStart(2,'0')===r.empNo);
+        if(existing){
+          // 이미 존재하는 구성원(예: 김혜환)은 기존 id/비밀번호/신청이력을 건드리지 않고
+          // 조인트레이딩 소속 표시와 권한 필드만 보강한다.
+          existing.company = 'jointrading';
+          existing.team = '조인트레이딩';
+          if(!existing.isApprover) existing.isApprover = LEADER_POSITIONS.includes(r.position);
+          if(r.isHrApprover) existing.isHrApprover = true;
+          if(r.isFullViewer) existing.isFullViewer = true;
+          if(r.isCompanyAdmin) existing.isCompanyAdmin = true;
+          if(r.canViewDetailLog) existing.canViewDetailLog = true;
+          if(r.canSelfCancelApproved) existing.canSelfCancelApproved = true;
+          if(!existing.baseUsed) existing.baseUsed = r.baseUsed||0; // 기존 사용 이력이 0이면 최신 집계치(8월 누계 사용)로 보정
+          continue;
+        }
         const newEmp = {
           id: uid('emp'), empNo: r.empNo, name: r.name, team: '조인트레이딩', position: r.position,
           company: 'jointrading',
