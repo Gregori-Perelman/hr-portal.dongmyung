@@ -865,6 +865,7 @@ function buildSeedEmployees(){
     canProxyAnyDate: !!s.canProxyAnyDate,
     canCarryOverOvertime: !!s.canCarryOverOvertime,
     annualTotal: s.annualTotal, baseUsed: 0,
+    company: 'dongmyung',
   }));
 }
 async function loadData(){
@@ -1125,6 +1126,47 @@ async function loadData(){
       state.data.passwordHashedV1 = true;
       await saveData();
     }
+    if(!state.data.grantedCompanyFieldV1){
+      // 조인트레이딩 합류 전까지는 전부 동명베아링/dmb 소속이었으므로, 회사 구분이 없던 기존 구성원은 전부 '동명'으로 표시
+      state.data.employees.forEach(e=>{ if(!e.company) e.company = 'dongmyung'; });
+      state.data.grantedCompanyFieldV1 = true;
+      await saveData();
+    }
+    if(!state.data.addedJoinTradingV1){
+      // 계열사 조인트레이딩 구성원 합류.
+      // 김혜환(원래 사번 37)은 기존 동명 구성원(대구지점 김규동)과 사번이 겹쳐서 로그인 충돌 방지를 위해 90번으로 새로 부여함.
+      // 김혜환 = 조인트레이딩 팀장 + 조인 범위 관리자(isCompanyAdmin) + 조인 연장근무 최종승인자(isHrApprover, 회사별로 분리됨).
+      // 이경헌(대표이사) = 동명의 이동원과 동일하게 열람은 전체(조인 범위)지만 기안/승인은 하지 않는 오너급이며, 연차 개념 자체가 없음(annualTotal:null).
+      // 김진현 = 혼자 일하는 포지션이라 타인 열람 권한이 전혀 없고, 역시 연차 개념이 없음(annualTotal:null).
+      const jtRoster = [
+        { empNo:'90', name:'김혜환', position:'팀장',   annualTotal:19,   baseUsed:7,    isCompanyAdmin:true, isHrApprover:true, isFullViewer:true, canViewDetailLog:true },
+        { empNo:'24', name:'김소은', position:'팀원',   annualTotal:17,   baseUsed:10.5 },
+        { empNo:'15', name:'이주연', position:'팀원',   annualTotal:15,   baseUsed:5.5 },
+        { empNo:'30', name:'서다은', position:'팀원',   annualTotal:16,   baseUsed:5.5 },
+        { empNo:'39', name:'천영재', position:'팀원',   annualTotal:16,   baseUsed:11.5 },
+        { empNo:'29', name:'정윤정', position:'팀원',   annualTotal:15,   baseUsed:10.5 },
+        { empNo:'44', name:'정현진', position:'팀원',   annualTotal:15,   baseUsed:8.5 },
+        { empNo:'55', name:'장동훈', position:'팀원',   annualTotal:15,   baseUsed:6.5 },
+        { empNo:'36', name:'이경헌', position:'대표이사', annualTotal:null, baseUsed:0, isFullViewer:true, canViewDetailLog:true, canSelfCancelApproved:true },
+        { empNo:'51', name:'김진현', position:'팀원',   annualTotal:null, baseUsed:0 },
+      ];
+      for(const r of jtRoster){
+        if(state.data.employees.some(e=>String(e.empNo).padStart(2,'0')===r.empNo)) continue; // 이미 있으면 건너뜀(재실행 안전)
+        const newEmp = {
+          id: uid('emp'), empNo: r.empNo, name: r.name, team: '조인트레이딩', position: r.position,
+          company: 'jointrading',
+          isAdmin: false, isApprover: LEADER_POSITIONS.includes(r.position),
+          isHrApprover: !!r.isHrApprover, isFullViewer: !!r.isFullViewer,
+          isCompanyAdmin: !!r.isCompanyAdmin, canViewDetailLog: !!r.canViewDetailLog,
+          canSelfCancelApproved: !!r.canSelfCancelApproved,
+          annualTotal: r.annualTotal, baseUsed: r.baseUsed||0,
+        };
+        await setEmployeePassword(newEmp, DEFAULT_PASSWORD);
+        state.data.employees.push(newEmp);
+      }
+      state.data.addedJoinTradingV1 = true;
+      await saveData();
+    }
   }catch(e){
     // 데이터 보정(마이그레이션) 중 예상치 못한 오류가 나더라도 절대로 기존 데이터를 새 것으로
     // 덮어쓰지 않는다. (예전에는 여기서 회사 데이터를 통째로 초기화해 실제 데이터가 사라지는
@@ -1164,8 +1206,16 @@ async function saveIdentity(employeeId){
 function isFinalOvertimeApprover(emp){
   return !!emp && !!emp.isHrApprover;
 }
-function finalApproverName(){
-  const e = state.data.employees.find(x=>x.isHrApprover);
+// 이동현(사번 40)은 동명/조인 구분 없이 사이트 전체를 관리하는 예외 — 회사 스코프 검사를 전부 건너뜀
+function isGlobalOverride(emp){
+  return !!emp && String(emp.empNo).padStart(2,'0')==='40';
+}
+// 연장근무 최종승인자인지 + "그 회사" 소속인지까지 함께 확인 (정나은=동명, 김혜환=조인 처럼 회사별로 나뉨)
+function isFinalOvertimeApproverFor(emp, company){
+  return isFinalOvertimeApprover(emp) && (!company || emp.company===company);
+}
+function finalApproverName(company){
+  const e = state.data.employees.find(x=>x.isHrApprover && (!company || x.company===company));
   return e ? e.name : '미지정';
 }
 function isLeaderPosition(emp){
@@ -1176,27 +1226,29 @@ function findTeamLeader(team){
 }
 function canApprove(r){
   if(!state.me) return false;
-  if(state.me.canCancelApproved) return true; // 승인취소 권한자는 타인 결재도 전부 가능
+  const canApproveOwner = empById(r.employeeId);
+  if(!canApproveOwner) return false;
+  // 승인취소 권한자는 같은 회사 타인 결재도 전부 가능 (이동현은 회사 구분 없이 전부)
+  if(state.me.canCancelApproved && (isGlobalOverride(state.me) || state.me.company===canApproveOwner.company)) return true;
   if(!state.me.isApprover) return false;
-  const owner = empById(r.employeeId);
-  if(!owner) return false;
+  const owner = canApproveOwner;
   if(r.type==='overtime'){
     if(r.status==='pending'){
       // 1차: 본인이 속한 팀장/지점장 (본인이 리더면 자동승인되어 이 상태에 머물지 않음)
       const leader = findTeamLeader(owner.team);
-      if(!leader) return isFinalOvertimeApprover(state.me); // 팀장이 없으면 최종승인자가 대신 처리
+      if(!leader) return isFinalOvertimeApproverFor(state.me, owner.company); // 팀장이 없으면 같은 회사 최종승인자가 대신 처리
       return state.me.id === leader.id;
     }
     if(r.status==='pending_hr'){
-      // 2차(최종): 지정된 연장근무 최종 승인자
-      return isFinalOvertimeApprover(state.me);
+      // 2차(최종): 지정된 연장근무 최종 승인자(같은 회사 소속만)
+      return isFinalOvertimeApproverFor(state.me, owner.company);
     }
     return false;
   }
   // 일반 유형: 본인이 속한 팀의 팀장/지점장만 승인 가능 (본인이 리더면 이미 자동승인되어 대기 상태가 아님)
   const leader = findTeamLeader(owner.team);
   if(leader) return state.me.id === leader.id;
-  return isFinalOvertimeApprover(state.me); // 팀장이 없는 경우의 안전장치
+  return isFinalOvertimeApproverFor(state.me, owner.company); // 팀장이 없는 경우의 안전장치
 }
 // 전체결재권(canCancelApproved) 지름길 없이, 원래 결재 순서상 진짜 이 사람 차례인지만 판단.
 // 승인함 화면에서 "내 차례" 건과 "대리로 처리 가능한" 건을 나눠 보여주기 위한 용도로만 사용.
@@ -1207,26 +1259,27 @@ function isMyGenuineApprovalTurn(r, viewer){
   if(r.type==='overtime'){
     if(r.status==='pending'){
       const leader = findTeamLeader(owner.team);
-      if(!leader) return isFinalOvertimeApprover(viewer);
+      if(!leader) return isFinalOvertimeApproverFor(viewer, owner.company);
       return viewer.id === leader.id;
     }
     if(r.status==='pending_hr'){
-      return isFinalOvertimeApprover(viewer);
+      return isFinalOvertimeApproverFor(viewer, owner.company);
     }
     return false;
   }
   const leader = findTeamLeader(owner.team);
   if(leader) return viewer.id === leader.id;
-  return isFinalOvertimeApprover(viewer);
+  return isFinalOvertimeApproverFor(viewer, owner.company);
 }
 function isApprovalRelevant(r, viewer){
   // 승인함에 표시할지 여부: 본인이 처리할 수 있거나(현재/과거), 본인이 실제로 처리한 이력이 있는 요청만 노출
-  if(viewer.canCancelApproved) return true; // 승인취소 권한자는 전체 요청을 볼 수 있음
   const owner = empById(r.employeeId);
   if(!owner) return false;
+  // 승인취소 권한자는 같은 회사 전체 요청을 볼 수 있음 (이동현은 회사 구분 없이 전부)
+  if(viewer.canCancelApproved && (isGlobalOverride(viewer) || viewer.company===owner.company)) return true;
   if(r.type==='overtime'){
     const leader = findTeamLeader(owner.team);
-    return (leader && leader.id===viewer.id) || isFinalOvertimeApprover(viewer) || r.teamApproverId===viewer.id || r.hrApproverId===viewer.id;
+    return (leader && leader.id===viewer.id) || isFinalOvertimeApproverFor(viewer, owner.company) || r.teamApproverId===viewer.id || r.hrApproverId===viewer.id;
   }
   const leader = findTeamLeader(owner.team);
   return (leader && leader.id===viewer.id) || r.approverId===viewer.id;
@@ -1237,7 +1290,9 @@ function myPendingCount(){
 }
 function visibleEmployeesForStatus(viewer){
   // 본인, 본인이 속한 팀의 팀장/지점장, 연장근무 최종승인자, 시스템 관리자, 전체열람 권한자만 조회 가능
-  if(viewer.isAdmin || isFinalOvertimeApprover(viewer) || viewer.isFullViewer) return state.data.employees;
+  // (이동현은 회사 구분 없이 전체, 그 외 관리자급은 본인 회사 소속만 — 동명/조인 서로 못 봄)
+  if(isGlobalOverride(viewer)) return state.data.employees;
+  if(viewer.isAdmin || isFinalOvertimeApprover(viewer) || viewer.isFullViewer || viewer.isCompanyAdmin) return state.data.employees.filter(e=>e.company===viewer.company);
   if(isLeaderPosition(viewer)) return state.data.employees.filter(e=>e.team===viewer.team);
   return state.data.employees.filter(e=>e.id===viewer.id);
 }
@@ -1350,11 +1405,11 @@ function navItems(){
   if(state.me.canViewDetailLog) items.push({id:'leave-status-detail', icon:'🔍', label:'연차현황 상세'});
   items.push({id:'overtime-status', icon:'🕐', label:'연장근무 현황'});
   if(state.me.isApprover || state.me.canCancelApproved) items.push({id:'approvals', icon:'✓', label:'승인함', badge: myPendingCount()});
-  if(state.me.isAdmin) items.push({id:'approval-log', icon:'📜', label:'결재내역'});
+  if(state.me.isAdmin || state.me.isCompanyAdmin) items.push({id:'approval-log', icon:'📜', label:'결재내역'});
   if(state.me.isAdmin) items.push({id:'deletion-log', icon:'🗑', label:'삭제내역'});
   items.push({id:'calendar', icon:'▦', label:'회사 캘린더'});
   items.push({id:'account', icon:'🔑', label:'계정설정'});
-  if(state.me.isAdmin || state.me.canUploadRoster) items.push({id:'members', icon:'☺', label:'구성원 관리'});
+  if(state.me.isAdmin || state.me.canUploadRoster || state.me.isCompanyAdmin) items.push({id:'members', icon:'☺', label:'구성원 관리'});
   return items;
 }
 
@@ -1620,6 +1675,7 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel,
       ${r.type==='overtime' && r.status==='pending_hr' && r.teamApproverId ? `<div class="req-reason">1차 승인: ${empName(r.teamApproverId)}</div>`:''}
       ${r.type==='overtime' && r.carryToNextMonth ? `<div class="req-reason" style="color:var(--amber);">📅 ${ymLabel(overtimeEffectiveYm(r))} 이월</div>`:''}
       ${(r.type==='annual'||r.type==='half') && r.carryToNextYear ? `<div class="req-reason" style="color:var(--amber);">📅 ${leaveEffectiveYear(r)}년도 연차수당 정산으로 이월</div>`:''}
+      ${(r.type==='annual'||r.type==='half') && r.advanceUseYear ? `<div class="req-reason" style="color:var(--amber);">⏳ ${r.advanceUseDays===r.days ? `${r.advanceUseYear}년 연차 선사용입니다` : `${trimNum(r.days)}일 중 ${trimNum(r.advanceUseDays)}일은 ${r.advanceUseYear}년 연차 선사용`}</div>`:''}
       ${r.autoApproved? `<div class="req-reason" style="color:var(--green);">⚡ 자동승인</div>`:''}
       ${r.noApprovalNeeded? `<div class="req-reason" style="color:#1C8FC7;">무결재 즉시등록</div>`:''}
       ${r.bulkImported? `<div class="req-reason" style="color:var(--muted);">📥 일괄상신</div>`:''}
@@ -1655,12 +1711,15 @@ function escapeHTML(s){ const d=document.createElement('div'); d.textContent=s; 
 /* ---------------- REQUEST FORM ---------------- */
 function renderRequestForm(main){
   const isOwnerRestricted = isOwnerTierEmp(state.me);
+  const formTargetEmpForTypes = ((state.me.canCancelApproved || state.me.canProxyAnyDate) && state.formTargetEmployeeId) ? (empById(state.formTargetEmployeeId)||state.me) : state.me;
+  const hasNoLeaveConcept = formTargetEmpForTypes.annualTotal==null; // 이경헌/김진현처럼 연차 개념 자체가 없는 직급
   const isSelfEditingNoApprovalType = state.editingRequestId && (()=>{
     const editingReqCheck = state.data.requests.find(r=>r.id===state.editingRequestId);
     return editingReqCheck && LEAVE_TYPES[editingReqCheck.type].noApproval && !state.me.canSelfCancelApproved;
   })();
   const allowedTypes = isOwnerRestricted ? ['busytrip','etc']
     : isSelfEditingNoApprovalType ? Object.keys(LEAVE_TYPES).filter(k=>LEAVE_TYPES[k].noApproval)
+    : hasNoLeaveConcept ? Object.keys(LEAVE_TYPES).filter(k=>k!=='annual' && k!=='half')
     : Object.keys(LEAVE_TYPES);
   if(!allowedTypes.includes(state.formType)) state.formType = allowedTypes[0];
   main.innerHTML = `
@@ -1705,7 +1764,7 @@ function renderRequestForm(main){
   }
   const targetSel = document.getElementById('target-employee');
   if(targetSel){
-    targetSel.onchange = ()=>{ state.formTargetEmployeeId = targetSel.value; renderDateFields(); };
+    targetSel.onchange = ()=>{ state.formTargetEmployeeId = targetSel.value; renderRequestForm(main); };
   }
   document.querySelectorAll('[data-type]').forEach(el=>{
     el.onclick = ()=>{ state.formType = el.dataset.type; renderRequestForm(main); };
@@ -1798,11 +1857,21 @@ function renderRequestForm(main){
       return;
     }
 
+    let advanceUse = null; // 잔여 연차가 부족해 내년 연차를 미리 당겨쓰는 경우의 정보
     if(t.deduct){
+      if(targetEmp.annualTotal==null){
+        showLimitModal(`${targetEmp.name}님은 연차 개념이 없는 직급이라 연차·반차를 신청할 수 없어요.`);
+        return;
+      }
       const remain = targetEmp.annualTotal - annualUsed(targetEmp.id);
       if(days > remain){
-        showLimitModal(`${targetEmp.id!==state.me.id? `${targetEmp.name}님의 ` : ''}잔여 연차는 <strong>${trimNum(remain)}일 (${daysToHours(remain)}시간)</strong>이에요.<br>${trimNum(days)}일(${daysToHours(days)}시간)은 신청할 수 없어요.`);
-        return;
+        const advanceDays = trimNum(days - Math.max(remain, 0));
+        const targetYear = Number(startDate.slice(0,4)) + 1;
+        const confirmMsg = remain > 0
+          ? `${trimNum(days)}일 중 ${advanceDays}일은 ${targetYear}년 연차 선사용입니다. 이대로 진행할까요?`
+          : `${targetYear}년 연차 선사용입니다. 이대로 진행할까요?`;
+        if(!confirm(confirmMsg)) return;
+        advanceUse = { year: targetYear, days: Number(advanceDays) };
       }
     }
 
@@ -1822,7 +1891,9 @@ function renderRequestForm(main){
       halfType, splitStart, splitEnd, otStart, otEnd, otMinutes, familySub, subType, targetClient,
       days, reason, status:'pending', rejectReason:'', createdAt: Date.now(),
       isBackdated: parseDate(startDate) < parseDate(todayStr()),
-      filedBy: targetEmp.id!==state.me.id ? state.me.id : null
+      filedBy: targetEmp.id!==state.me.id ? state.me.id : null,
+      advanceUseYear: advanceUse ? advanceUse.year : null,
+      advanceUseDays: advanceUse ? advanceUse.days : null
     };
 
     // 출장은 결재가 필요 없는 유형: 누구든 신청 즉시 등록(승인) 처리
@@ -1856,7 +1927,7 @@ function renderRequestForm(main){
     let showToastMsg = '신청이 제출되었어요. 승인을 기다려주세요.';
     if(newReq.noApprovalNeeded) showToastMsg = '출장이 등록됐어요. 별도 결재 없이 바로 반영돼요.';
     else if(newReq.status==='approved') showToastMsg = '신청이 제출과 동시에 자동 승인됐어요.';
-    else if(newReq.status==='pending_hr') showToastMsg = `1차(본인) 승인이 자동 처리됐어요. ${finalApproverName()}님의 최종 승인만 남았어요.`;
+    else if(newReq.status==='pending_hr') showToastMsg = `1차(본인) 승인이 자동 처리됐어요. ${finalApproverName(targetEmp.company)}님의 최종 승인만 남았어요.`;
 
     if(state.editingRequestId){
       // 수정 모드: 새로 만들지 않고 기존 레코드의 내용만 갱신 (상태/승인정보는 유지)
@@ -1978,7 +2049,7 @@ function renderDateFields(){
         </div>
       </div>
       <div class="hint" id="ot-hours-hint"></div>
-      <div class="hint">30분 단위로만 선택돼요 · 이 유형은 연차에서 차감되지 않고, <strong>${finalApproverName()}</strong>님(연장근무 최종승인자)이 승인해요.</div>
+      <div class="hint">30분 단위로만 선택돼요 · 이 유형은 연차에서 차감되지 않고, <strong>${finalApproverName(targetEmp.company)}</strong>님(연장근무 최종승인자)이 승인해요.</div>
     `;
     const startInp = document.getElementById('ot-start');
     const endInp = document.getElementById('ot-end');
@@ -2176,7 +2247,7 @@ function renderLeaveStatus(main){
     _default: e=>e.name,
   };
   const visible = sortSelfFirstByColumn(
-    visibleEmployeesForStatus(state.me).filter(e=>!isOwnerTierEmp(e)),
+    visibleEmployeesForStatus(state.me).filter(e=>!isOwnerTierEmp(e) && e.annualTotal!=null),
     state.me.id, leaveStatusGetters, state.leaveStatusSortCol, state.leaveStatusSortDir
   );
   const visibleIds = new Set(visible.map(e=>e.id));
@@ -2886,7 +2957,12 @@ function approvalLogComparator(a, b){
   return state.approvalLogSortDir==='asc' ? result : -result;
 }
 function renderApprovalLog(main){
-  const decided = state.data.requests.filter(r=>r.status==='approved'||r.status==='rejected'||r.status==='cancelled');
+  const decided = state.data.requests.filter(r=>{
+    if(r.status!=='approved' && r.status!=='rejected' && r.status!=='cancelled') return false;
+    if(isGlobalOverride(state.me)) return true; // 이동현은 회사 구분 없이 전체
+    const owner = empById(r.employeeId);
+    return !!owner && owner.company===state.me.company; // 그 외에는 본인 회사 소속 건만
+  });
   const canDelete = !!state.me.isAdmin;
   if(!state.approvalLogSortCol) state.approvalLogSortCol = 'date';
   if(!state.approvalLogSortDir) state.approvalLogSortDir = 'desc';
@@ -3097,7 +3173,7 @@ function renderApprovals(main){
           const leader = owner ? findTeamLeader(owner.team) : null;
           note = leader ? `${leader.name}님(팀장/지점장) 1차 승인 필요` : '팀장/지점장 1차 승인 필요';
         }else if(r.status==='pending_hr'){
-          note = `${finalApproverName()}님(연장근무 최종승인자) 승인 필요`;
+          note = `${finalApproverName(owner && owner.company)}님(연장근무 최종승인자) 승인 필요`;
         }
       }else{
         const leader = owner ? findTeamLeader(owner.team) : null;
@@ -3120,18 +3196,19 @@ function renderApprovals(main){
       const r = state.data.requests.find(x=>x.id===btn.dataset.approve);
       if(!canApprove(r)){ showToast('이 신청은 본인만 승인할 수 있어요.'); return; }
       if(r.type==='overtime' && r.status==='pending'){
+        const otOwner = empById(r.employeeId);
         r.teamApproverId=state.me.id; r.teamApprovedAt=Date.now();
-        if(isFinalOvertimeApprover(state.me)){
-          // 1차 승인자가 최종승인자와 동일인이면 두 번 결재할 필요 없이 한 번에 최종승인 처리
+        if(isFinalOvertimeApproverFor(state.me, otOwner && otOwner.company)){
+          // 1차 승인자가 (같은 회사) 최종승인자와 동일인이면 두 번 결재할 필요 없이 한 번에 최종승인 처리
           r.status='approved'; r.hrApproverId=state.me.id; r.hrApprovedAt=Date.now(); r.approverId=state.me.id;
           await saveData();
           showToast(`${empName(r.employeeId)}님의 연장근무를 승인했어요.`);
         }else{
           r.status='pending_hr';
           await saveData();
-          showToast(`${empName(r.employeeId)}님의 연장근무를 1차 승인했어요. ${finalApproverName()}님의 최종 승인이 남았어요.`);
+          showToast(`${empName(r.employeeId)}님의 연장근무를 1차 승인했어요. ${finalApproverName(otOwner && otOwner.company)}님의 최종 승인이 남았어요.`);
           const owner = empById(r.employeeId);
-          const hrApproverEmp = state.data.employees.find(x=>x.isHrApprover);
+          const hrApproverEmp = state.data.employees.find(x=>x.isHrApprover && (!owner || x.company===owner.company));
           sendNotificationEmail(
             (hrApproverEmp && hrApproverEmp.email) ? hrApproverEmp.email : 'nicheta73@naver.com',
             `[HR Portal] ${empName(r.employeeId)}님의 연장근무 최종 승인 필요`,
@@ -3478,7 +3555,7 @@ function renderMembers(main){
       <div class="hint" id="roster-upload-result" style="margin-top:10px;"></div>
     </div>
     `:''}
-    ${state.me.isAdmin ? `
+    ${(state.me.isAdmin || state.me.isCompanyAdmin) ? `
     <div class="card" style="margin-bottom:20px;">
       <div class="section-title">구성원 추가</div>
       <div class="field row-2">
@@ -3553,10 +3630,12 @@ function renderMembers(main){
     name: e=>e.name,
     _default: e=>e.name,
   };
-  const sortedEmployees = sortSelfFirstByColumn(state.data.employees, state.me.id, membersGetters, state.membersSortCol, state.membersSortDir);
+  const membersScopeEmployees = isGlobalOverride(state.me) ? state.data.employees : state.data.employees.filter(e=>e.company===state.me.company);
+  const sortedEmployees = sortSelfFirstByColumn(membersScopeEmployees, state.me.id, membersGetters, state.membersSortCol, state.membersSortDir);
   body.innerHTML = sortedEmployees.map(e=>{
+    const hasLeaveConcept = e.annualTotal!=null;
     const used = annualUsed(e.id);
-    const remain = (e.annualTotal - used).toFixed(1).replace(/\.0$/,'');
+    const remain = hasLeaveConcept ? (e.annualTotal - used).toFixed(1).replace(/\.0$/,'') : '—';
     return `
     <tr>
       <td style="font-family:var(--mono); color:var(--ink-soft);">${e.empNo||''}</td>
@@ -3574,16 +3653,20 @@ function renderMembers(main){
         </select>
       </td>
       <td>
+        ${state.me.isAdmin ? `
         <button class="toggle-btn ${e.isApprover?'on':''}" data-toggle-approver="${e.id}">승인자</button>
         <button class="toggle-btn ${e.isHrApprover?'on':''}" data-toggle-hr="${e.id}" style="margin-top:4px;">연장근무 최종승인</button>
         <button class="toggle-btn ${e.isFullViewer?'on':''}" data-toggle-fullview="${e.id}" style="margin-top:4px;">연차/연장근무 전체열람</button>
         <button class="toggle-btn ${e.canCancelApproved?'on':''}" data-toggle-cancel="${e.id}" style="margin-top:4px;">승인취소 권한</button>
         <button class="toggle-btn ${e.canBackupData?'on':''}" data-toggle-backup="${e.id}" style="margin-top:4px;">데이터 백업 권한</button>
         <button class="toggle-btn ${e.isAdmin?'on':''}" data-toggle-admin="${e.id}" style="margin-top:4px;">시스템 관리자</button>
+        ` : `
+        <span style="font-size:11px; color:var(--muted);">${e.isApprover?'승인자 ':''}${e.isHrApprover?'· 최종승인 ':''}${e.isFullViewer?'· 전체열람 ':''}</span>
+        `}
       </td>
-      <td><input type="text" inputmode="decimal" class="balance-input" data-balance="${e.id}" value="${e.annualTotal}"></td>
-      <td><input type="text" inputmode="decimal" class="balance-input" data-baseused="${e.id}" value="${e.baseUsed||0}"></td>
-      <td style="font-family:var(--mono); color:var(--ink-soft);">${remain}일 (${daysToHours(e.annualTotal-used)}시간)</td>
+      <td><input type="text" inputmode="decimal" class="balance-input" data-balance="${e.id}" value="${hasLeaveConcept? e.annualTotal : ''}" ${hasLeaveConcept? '' : 'placeholder="연차없음"'}></td>
+      <td><input type="text" inputmode="decimal" class="balance-input" data-baseused="${e.id}" value="${hasLeaveConcept? (e.baseUsed||0) : ''}" ${hasLeaveConcept? '' : 'disabled'}></td>
+      <td style="font-family:var(--mono); color:var(--ink-soft);">${hasLeaveConcept? `${remain}일 (${daysToHours(e.annualTotal-used)}시간)` : '연차없음'}</td>
       <td>
         <button class="btn btn-sm btn-ghost" data-reset-pw="${e.id}" style="width:auto; margin-bottom:4px;">PW 초기화</button>
         ${!e.isAdmin? `<button class="btn btn-sm btn-danger" data-remove="${e.id}">삭제</button>`:''}
@@ -3807,6 +3890,8 @@ function renderMembers(main){
 
           const existing = state.data.employees.find(e=>String(e.empNo).padStart(2,'0')===empNo);
           if(existing){
+            // 회사 스코프가 있는 업로더(전체 관리자가 아님)는 다른 회사 소속 기존 구성원은 건드리지 않음
+            if(!isGlobalOverride(state.me) && existing.company && existing.company!==state.me.company){ skipped++; continue; }
             existing.name = name || existing.name;
             existing.team = team || existing.team;
             if(position){
@@ -3816,9 +3901,10 @@ function renderMembers(main){
             if(annualTotal!=null && !isNaN(annualTotal)) existing.annualTotal = annualTotal;
             updated++;
           }else{
+            const newEmpCompany = isGlobalOverride(state.me) ? (team.includes('조인') ? 'jointrading' : 'dongmyung') : state.me.company;
             const newEmp = {
               id: uid('emp'), empNo,
-              name, team, position: position||'팀원',
+              name, team, position: position||'팀원', company: newEmpCompany,
               isAdmin:false, isApprover: LEADER_POSITIONS.includes(position),
               isHrApprover:false, isFullViewer:false, canUploadRoster:false,
               annualTotal: (annualTotal!=null && !isNaN(annualTotal))? annualTotal : 15,
@@ -3844,7 +3930,7 @@ function renderMembers(main){
       }
     };
   }
-  if(state.me.isAdmin){
+  if(state.me.isAdmin || state.me.isCompanyAdmin){
     document.getElementById('add-member').onclick = async ()=>{
       const empNoRaw = document.getElementById('new-member-empno').value.trim();
       const empNo = empNoRaw.padStart(2, '0');
@@ -3855,8 +3941,10 @@ function renderMembers(main){
       if(!empNoRaw){ showToast('사번을 입력해주세요.'); return; }
       if(!name){ showToast('이름을 입력해주세요.'); return; }
       if(state.data.employees.some(e=>String(e.empNo).padStart(2,'0')===empNo)){ showToast('이미 등록된 사번이에요.'); return; }
+      // 회사 스코프 관리자(예: 김혜환)는 본인 회사 소속으로만 새 구성원을 추가할 수 있음
+      const newEmpCompany = isGlobalOverride(state.me) ? (team.includes('조인') ? 'jointrading' : 'dongmyung') : state.me.company;
       const newEmp = {
-        id: uid('emp'), empNo, name, team, position,
+        id: uid('emp'), empNo, name, team, position, company: newEmpCompany,
         isAdmin: false, isApprover: LEADER_POSITIONS.includes(position),
         isHrApprover: false, annualTotal: 15, baseUsed: 0
       };
