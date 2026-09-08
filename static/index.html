@@ -3402,10 +3402,13 @@ function showDayDetailModal(dateStr){
   overlay.className = 'modal-overlay';
   overlay.id = 'day-detail-modal';
   // 이 모달은 날짜마다 내용 길이가 달라서 화면 정중앙 정렬(기본 .modal-overlay)로 두면
-  // 화살표 위치가 날짜별로 위아래로 움직인다. 상단을 고정해서 마우스를 움직이지 않고도
-  // 같은 자리에서 계속 클릭해 여러 날짜를 넘길 수 있게 한다.
+  // 화살표 위치가 날짜별로 위아래로 움직인다. 뒤에 보이는 캘린더 카드의 상단 테두리와
+  // 팝업 상단 테두리 높이를 맞춰서, 마우스를 움직이지 않고도 같은 자리에서 계속
+  // 클릭해 여러 날짜를 넘길 수 있게 한다.
+  const calCardEl = document.getElementById('cal-body') && document.getElementById('cal-body').closest('.card');
+  const targetTop = calCardEl ? Math.max(calCardEl.getBoundingClientRect().top, 0) : 64;
   overlay.style.alignItems = 'flex-start';
-  overlay.style.paddingTop = '64px';
+  overlay.style.paddingTop = targetTop + 'px';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:520px; text-align:left;">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:8px;">
