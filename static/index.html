@@ -3392,16 +3392,24 @@ function showDayDetailModal(dateStr){
   const d = parseDate(dateStr);
   const dowLabel = ['일','월','화','수','목','금','토'][d.getDay()];
 
+  const shiftDateStr = (baseStr, delta)=>{
+    const dt = parseDate(baseStr);
+    dt.setDate(dt.getDate()+delta);
+    return fmtDate(dt);
+  };
+
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'day-detail-modal';
   overlay.innerHTML = `
     <div class="modal-box" style="max-width:520px; text-align:left;">
-      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
-        <div>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:8px;">
+        <button class="btn btn-sm btn-ghost" id="day-modal-prev" style="width:auto; padding:6px 10px; font-size:16px;" title="전날">‹</button>
+        <div style="text-align:center; flex:1;">
           <div style="font-family:var(--mono); font-size:13px; color:var(--muted);">${dateStr} (${dowLabel})${holidayLabel? ` · ${holidayLabel}`:''}</div>
           <div style="font-weight:800; font-size:18px;">이 날짜의 근태 현황</div>
         </div>
+        <button class="btn btn-sm btn-ghost" id="day-modal-next" style="width:auto; padding:6px 10px; font-size:16px;" title="다음날">›</button>
         <button class="btn btn-sm btn-ghost" id="day-modal-close" style="width:auto;">닫기</button>
       </div>
       <div class="req-list" style="max-height:60vh; overflow-y:auto;">
@@ -3411,6 +3419,8 @@ function showDayDetailModal(dateStr){
   document.body.appendChild(overlay);
   const close = ()=> overlay.remove();
   document.getElementById('day-modal-close').onclick = close;
+  document.getElementById('day-modal-prev').onclick = ()=> showDayDetailModal(shiftDateStr(dateStr, -1));
+  document.getElementById('day-modal-next').onclick = ()=> showDayDetailModal(shiftDateStr(dateStr, 1));
   overlay.onclick = (e)=>{ if(e.target===overlay) close(); };
 }
 
