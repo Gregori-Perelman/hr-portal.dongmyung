@@ -1182,6 +1182,18 @@ async function loadData(){
       state.data.addedJoinTradingV1 = true;
       await saveData();
     }
+    if(!state.data.fixedKimHyeHwanEmpNoV1){
+      // 위 addedJoinTradingV1이 예전 버그 있던 코드로 이미 한 번 실행되면서 김혜환님이
+      // 90번으로 잘못 생성되었음(당시 37번은 이미 다른 사람이 쓰는 줄 착각). 실사용(연차/연장근무
+      // 신청)이 전혀 없는 테스트 단계였음을 확인했으므로, 원래 사번인 37번으로 되돌린다.
+      const wrong = state.data.employees.find(e=>e.name==='김혜환' && String(e.empNo).padStart(2,'0')==='90');
+      const already37 = state.data.employees.some(e=>String(e.empNo).padStart(2,'0')==='37');
+      if(wrong && !already37){
+        wrong.empNo = '37';
+      }
+      state.data.fixedKimHyeHwanEmpNoV1 = true;
+      await saveData();
+    }
   }catch(e){
     // 데이터 보정(마이그레이션) 중 예상치 못한 오류가 나더라도 절대로 기존 데이터를 새 것으로
     // 덮어쓰지 않는다. (예전에는 여기서 회사 데이터를 통째로 초기화해 실제 데이터가 사라지는
