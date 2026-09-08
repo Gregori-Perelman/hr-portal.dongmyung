@@ -773,6 +773,18 @@ function overtimeEffectiveYm(r){
   const d = new Date(y, m, 1); // m은 0-index 기준 다음달
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
 }
+// 연차·반차·분할반차의 "연차수당 정산 기준 연도"를 계산.
+// 12월에 실제로 사용한 건 중 이월 처리된 것은, 실제 사용일이 속한 연도가 아니라
+// 다음해 연말 정산(연차수당 지급) 기준으로 그 다음해로 계산된다.
+// 실제 사용 날짜(startDate)는 절대 바뀌지 않고, 이 값은 "몇 년도 정산 몫인지"만 나타낸다.
+function leaveEffectiveYear(r){
+  const y = Number((r.startDate||'').slice(0,4));
+  if(!y) return null;
+  return r.carryToNextYear ? y+1 : y;
+}
+function isDecemberRequest(r){
+  return (r.startDate||'').slice(5,7)==='12';
+}
 function ymLabel(ym){
   if(!ym) return '';
   const [y,m] = ym.split('-').map(Number);
@@ -1186,6 +1198,27 @@ function canApprove(r){
   if(leader) return state.me.id === leader.id;
   return isFinalOvertimeApprover(state.me); // 팀장이 없는 경우의 안전장치
 }
+// 전체결재권(canCancelApproved) 지름길 없이, 원래 결재 순서상 진짜 이 사람 차례인지만 판단.
+// 승인함 화면에서 "내 차례" 건과 "대리로 처리 가능한" 건을 나눠 보여주기 위한 용도로만 사용.
+function isMyGenuineApprovalTurn(r, viewer){
+  if(!viewer || !viewer.isApprover) return false;
+  const owner = empById(r.employeeId);
+  if(!owner) return false;
+  if(r.type==='overtime'){
+    if(r.status==='pending'){
+      const leader = findTeamLeader(owner.team);
+      if(!leader) return isFinalOvertimeApprover(viewer);
+      return viewer.id === leader.id;
+    }
+    if(r.status==='pending_hr'){
+      return isFinalOvertimeApprover(viewer);
+    }
+    return false;
+  }
+  const leader = findTeamLeader(owner.team);
+  if(leader) return viewer.id === leader.id;
+  return isFinalOvertimeApprover(viewer);
+}
 function isApprovalRelevant(r, viewer){
   // 승인함에 표시할지 여부: 본인이 처리할 수 있거나(현재/과거), 본인이 실제로 처리한 이력이 있는 요청만 노출
   if(viewer.canCancelApproved) return true; // 승인취소 권한자는 전체 요청을 볼 수 있음
@@ -1586,6 +1619,7 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel,
       ${r.type==='overtime' && r.status==='approved' ? `<div class="req-reason">1차 승인: ${empName(r.teamApproverId)} · 최종 승인: ${empName(r.hrApproverId)}</div>`:''}
       ${r.type==='overtime' && r.status==='pending_hr' && r.teamApproverId ? `<div class="req-reason">1차 승인: ${empName(r.teamApproverId)}</div>`:''}
       ${r.type==='overtime' && r.carryToNextMonth ? `<div class="req-reason" style="color:var(--amber);">📅 ${ymLabel(overtimeEffectiveYm(r))} 이월</div>`:''}
+      ${(r.type==='annual'||r.type==='half') && r.carryToNextYear ? `<div class="req-reason" style="color:var(--amber);">📅 ${leaveEffectiveYear(r)}년도 연차수당 정산으로 이월</div>`:''}
       ${r.autoApproved? `<div class="req-reason" style="color:var(--green);">⚡ 자동승인</div>`:''}
       ${r.noApprovalNeeded? `<div class="req-reason" style="color:#1C8FC7;">무결재 즉시등록</div>`:''}
       ${r.bulkImported? `<div class="req-reason" style="color:var(--muted);">📥 일괄상신</div>`:''}
@@ -1608,8 +1642,11 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel,
     ${showAdminCancel && r.status==='approved' ? `
       <button class="btn btn-sm btn-danger" data-admin-cancel="${r.id}" style="margin-left:8px;">승인 취소(철회)</button>
     `:''}
-    ${showCarryOverToggle && r.type==='overtime' && r.status==='approved' ? `
+    ${showCarryOverToggle && r.status==='approved' && r.type==='overtime' ? `
       <button class="btn btn-sm btn-ghost" data-toggle-carryover="${r.id}" style="width:auto; white-space:nowrap; margin-left:8px;">${r.carryToNextMonth? '이월 취소':'다음달로 이월'}</button>
+    `:''}
+    ${showCarryOverToggle && r.status==='approved' && (r.type==='annual'||r.type==='half') && isDecemberRequest(r) ? `
+      <button class="btn btn-sm btn-ghost" data-toggle-carryover="${r.id}" style="width:auto; white-space:nowrap; margin-left:8px;">${r.carryToNextYear? '이월 취소':'다음해로 이월'}</button>
     `:''}
   </div>`;
 }
@@ -2188,11 +2225,11 @@ function renderLeaveStatus(main){
       </table>
       </div>
     </div>
-    ${state.me.canCancelApproved ? `
+    ${(state.me.canCancelApproved || state.me.canCarryOverOvertime) ? `
     <div class="card">
-      <div class="section-title">승인된 신청 관리 <span style="font-size:11.5px; color:var(--muted); font-weight:600;">정나은·이동현만 보여요 · 사유가 생겨 취소하면 연차가 다시 잔여로 돌아가요</span></div>
+      <div class="section-title">승인된 신청 관리 <span style="font-size:11.5px; color:var(--muted); font-weight:600;">정나은·이동현만 취소할 수 있어요(사유가 생겨 취소하면 연차가 다시 잔여로 돌아가요) · 정나은·김남홍·이동현은 12월 연차/반차/분할반차를 다음해로 이월 처리할 수 있어요</span></div>
       <div class="req-list">
-        ${approvedReqs.length? approvedReqs.map(r=>reqCardHTML(r,false,false,null,true)).join('') : `<div class="empty">승인된 신청이 없어요.</div>`}
+        ${approvedReqs.length? approvedReqs.map(r=>reqCardHTML(r,false,false,null,state.me.canCancelApproved,state.me.canCarryOverOvertime)).join('') : `<div class="empty">승인된 신청이 없어요.</div>`}
       </div>
     </div>
     `:''}
@@ -2212,6 +2249,20 @@ function renderLeaveStatus(main){
         r.cancelledAt = Date.now();
         await saveData();
         showToast('승인을 취소했어요.');
+        renderLeaveStatus(main);
+      };
+    });
+  }
+  if(state.me.canCarryOverOvertime){
+    document.querySelectorAll('[data-toggle-carryover]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const r = state.data.requests.find(x=>x.id===btn.dataset.toggleCarryover);
+        if(!r) return;
+        r.carryToNextYear = !r.carryToNextYear;
+        r.carryOverBy = state.me.id;
+        r.carryOverAt = Date.now();
+        await saveData();
+        showToast(r.carryToNextYear? `${leaveEffectiveYear(r)}년도 연차수당 정산으로 이월 처리했어요.` : '이월 처리를 취소했어요.');
         renderLeaveStatus(main);
       };
     });
@@ -3011,25 +3062,32 @@ function renderDeletionLog(main){
 
 /* ---------------- APPROVALS ---------------- */
 function renderApprovals(main){
-  const pending = state.data.requests.filter(r=>(r.status==='pending'||r.status==='pending_hr') && isApprovalRelevant(r, state.me)).sort((a,b)=>a.createdAt-b.createdAt);
+  const allPending = state.data.requests.filter(r=>(r.status==='pending'||r.status==='pending_hr') && isApprovalRelevant(r, state.me)).sort((a,b)=>a.createdAt-b.createdAt);
+  const showProxyInbox = !!state.me.canCancelApproved; // 정나은·김남홍·이동현처럼 전체결재권이 있는 사람만 대리승인함이 보임
+  const pending = showProxyInbox ? allPending.filter(r=>isMyGenuineApprovalTurn(r, state.me)) : allPending;
+  const proxyPending = showProxyInbox ? allPending.filter(r=>!isMyGenuineApprovalTurn(r, state.me)) : [];
   const decided = state.data.requests.filter(r=>r.status!=='pending' && r.status!=='pending_hr' && isApprovalRelevant(r, state.me)).sort((a,b)=>b.createdAt-a.createdAt).slice(0,8);
   main.innerHTML = `
     <div class="page-head">
       <div class="page-eyebrow">Approvals</div>
       <h1 class="page-title">승인함</h1>
-      <p class="page-desc">대기 중인 요청 ${pending.length}건이 있어요.</p>
+      <p class="page-desc">대기 중인 요청 ${pending.length}건이 있어요.${showProxyInbox? ` (대리승인함 ${proxyPending.length}건 별도)`:''}</p>
     </div>
     <div class="card" style="margin-bottom:20px;">
       <div class="section-title">결재 대기</div>
       <div class="req-list" id="pending-list"></div>
     </div>
+    ${showProxyInbox? `
+    <div class="card" style="margin-bottom:20px;">
+      <div class="section-title">대리승인함 <span style="font-size:11.5px; color:var(--muted); font-weight:600;">본래 결재 차례는 아니지만, 전체결재권으로 대신 처리할 수 있는 건이에요</span></div>
+      <div class="req-list" id="proxy-pending-list"></div>
+    </div>` : ''}
     <div class="card">
       <div class="section-title">최근 처리 내역</div>
       <div class="req-list" id="decided-list"></div>
     </div>
   `;
-  const pList = document.getElementById('pending-list');
-  pList.innerHTML = pending.length? pending.map(r=>{
+  const renderPendingCard = (r)=>{
     const iCanAct = canApprove(r);
     const owner = empById(r.employeeId);
     let note = null;
@@ -3047,7 +3105,13 @@ function renderApprovals(main){
       }
     }
     return reqCardHTML(r, false, iCanAct, note);
-  }).join('') : `<div class="empty"><div class="empty-icon">✅</div>처리할 요청이 없어요.</div>`;
+  };
+  const pList = document.getElementById('pending-list');
+  pList.innerHTML = pending.length? pending.map(renderPendingCard).join('') : `<div class="empty"><div class="empty-icon">✅</div>처리할 요청이 없어요.</div>`;
+  if(showProxyInbox){
+    const ppList = document.getElementById('proxy-pending-list');
+    ppList.innerHTML = proxyPending.length? proxyPending.map(renderPendingCard).join('') : `<div class="empty">대리로 처리할 결재가 없어요.</div>`;
+  }
   const dList = document.getElementById('decided-list');
   dList.innerHTML = decided.length? decided.map(r=>reqCardHTML(r,false,false)).join('') : `<div class="empty">처리 내역이 없어요.</div>`;
 
