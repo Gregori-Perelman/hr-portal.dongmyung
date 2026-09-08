@@ -2978,6 +2978,10 @@ function approvalLogComparator(a, b){
     result = empName(a.employeeId).localeCompare(empName(b.employeeId), 'ko');
   }else if(state.approvalLogSortCol==='period'){
     result = a.startDate.localeCompare(b.startDate);
+  }else if(state.approvalLogSortCol==='team'){
+    const teamA = (empById(a.employeeId)||{}).team || '';
+    const teamB = (empById(b.employeeId)||{}).team || '';
+    result = teamA.localeCompare(teamB, 'ko');
   }else{
     result = a.createdAt - b.createdAt;
   }
@@ -2993,22 +2997,46 @@ function renderApprovalLog(main){
   const canDelete = !!state.me.isAdmin;
   if(!state.approvalLogSortCol) state.approvalLogSortCol = 'date';
   if(!state.approvalLogSortDir) state.approvalLogSortDir = 'desc';
+  if(!state.approvalLogTeamDir) state.approvalLogTeamDir = 'asc';
+  if(!state.approvalLogStatusFilter) state.approvalLogStatusFilter = 'all';
+  const statusFilters = [
+    { key:'all', label:'전체' },
+    { key:'approved', label:'승인' },
+    { key:'rejected', label:'반려' },
+    { key:'cancelled', label:'취소' },
+  ];
+  const shown = state.approvalLogStatusFilter==='all' ? decided : decided.filter(r=>r.status===state.approvalLogStatusFilter);
   main.innerHTML = `
     <div class="page-head" style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
       <div>
         <div class="page-eyebrow">Approval Log</div>
         <h1 class="page-title">결재내역</h1>
-        <p class="page-desc">회사 전체의 결재 처리 이력이에요. 다른 팀장·부서장이 처리한 건도 모두 볼 수 있어요. "기안일"/"이름"/"기간"을 클릭하면 그 기준으로 정렬돼요 (다시 누르면 반대 순서). (시스템 관리자 전용)</p>
+        <p class="page-desc">회사 전체의 결재 처리 이력이에요. 다른 팀장·부서장이 처리한 건도 모두 볼 수 있어요. "기안일"/"이름"/"팀"/"기간"을 클릭하면 그 기준으로 정렬돼요 (다시 누르면 반대 순서). "팀별순"은 다시 누르면 팀 순서가 뒤집혀요. (시스템 관리자 전용)</p>
       </div>
-      <div style="display:flex; gap:8px;">
-        <button class="btn btn-sm ${state.approvalLogSort==='time'?'btn-primary':'btn-ghost'}" id="sort-time" style="width:auto;">시계열순</button>
-        <button class="btn btn-sm ${state.approvalLogSort==='team'?'btn-primary':'btn-ghost'}" id="sort-team" style="width:auto;">팀별순</button>
+      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
+        <div style="display:flex; gap:6px;">
+          ${statusFilters.map(f=>`<button class="btn btn-sm ${state.approvalLogStatusFilter===f.key?'btn-primary':'btn-ghost'}" data-status-filter="${f.key}" style="width:auto;">${f.label}</button>`).join('')}
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-sm ${state.approvalLogSort==='time'?'btn-primary':'btn-ghost'}" id="sort-time" style="width:auto;">시계열순</button>
+          <button class="btn btn-sm ${state.approvalLogSort==='team'?'btn-primary':'btn-ghost'}" id="sort-team" style="width:auto;">팀별순${state.approvalLogSort==='team'? (state.approvalLogTeamDir==='asc'?' ▲':' ▼') : ''}</button>
+        </div>
       </div>
     </div>
     <div id="approval-log-list"></div>
   `;
+  document.querySelectorAll('[data-status-filter]').forEach(btn=>{
+    btn.onclick = ()=>{ state.approvalLogStatusFilter = btn.dataset.statusFilter; renderApprovalLog(main); };
+  });
   document.getElementById('sort-time').onclick = ()=>{ state.approvalLogSort='time'; renderApprovalLog(main); };
-  document.getElementById('sort-team').onclick = ()=>{ state.approvalLogSort='team'; renderApprovalLog(main); };
+  document.getElementById('sort-team').onclick = ()=>{
+    if(state.approvalLogSort==='team'){
+      state.approvalLogTeamDir = state.approvalLogTeamDir==='asc' ? 'desc' : 'asc'; // 이미 팀별순이면 다시 눌렀을 때 팀 순서를 뒤집음
+    }else{
+      state.approvalLogSort='team';
+    }
+    renderApprovalLog(main);
+  };
 
   const list = document.getElementById('approval-log-list');
   const rowHTML = (r, showTeamCol)=>{
@@ -3028,16 +3056,16 @@ function renderApprovalLog(main){
     </tr>`;
   };
   const sortArrow = (col)=> state.approvalLogSortCol===col ? (state.approvalLogSortDir==='asc'?' ▲':' ▼') : '';
-  const theadCols = `<th data-sort-col="date" style="cursor:pointer;">기안일${sortArrow('date')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrow('name')}</th><th>팀</th><th>유형</th><th data-sort-col="period" style="cursor:pointer;">기간${sortArrow('period')}</th><th>결과</th><th>결재선</th>${canDelete? '<th></th>':''}`;
+  const theadCols = `<th data-sort-col="date" style="cursor:pointer;">기안일${sortArrow('date')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrow('name')}</th><th data-sort-col="team" style="cursor:pointer;">팀${sortArrow('team')}</th><th>유형</th><th data-sort-col="period" style="cursor:pointer;">기간${sortArrow('period')}</th><th>결과</th><th>결재선</th>${canDelete? '<th></th>':''}`;
   const theadColsNoTeam = `<th data-sort-col="date" style="cursor:pointer;">기안일${sortArrow('date')}</th><th data-sort-col="name" style="cursor:pointer;">이름${sortArrow('name')}</th><th>유형</th><th data-sort-col="period" style="cursor:pointer;">기간${sortArrow('period')}</th><th>결과</th><th>결재선</th>${canDelete? '<th></th>':''}`;
 
-  if(decided.length===0){
-    list.innerHTML = `<div class="card"><div class="empty">아직 처리된 결재 내역이 없어요.</div></div>`;
+  if(shown.length===0){
+    list.innerHTML = `<div class="card"><div class="empty">${state.approvalLogStatusFilter==='all'?'아직 처리된 결재 내역이 없어요.':'해당하는 내역이 없어요.'}</div></div>`;
     return;
   }
 
   if(state.approvalLogSort==='time'){
-    const sorted = decided.slice().sort(approvalLogComparator);
+    const sorted = shown.slice().sort(approvalLogComparator);
     list.innerHTML = `
       <div class="card">
         <table class="members">
@@ -3047,13 +3075,14 @@ function renderApprovalLog(main){
       </div>`;
   }else{
     const byTeam = {};
-    decided.forEach(r=>{
+    shown.forEach(r=>{
       const owner = empById(r.employeeId);
       const team = (owner && owner.team) || '미지정';
       if(!byTeam[team]) byTeam[team] = [];
       byTeam[team].push(r);
     });
-    const teamNames = Object.keys(byTeam).sort((a,b)=>a.localeCompare(b,'ko'));
+    let teamNames = Object.keys(byTeam).sort((a,b)=>a.localeCompare(b,'ko'));
+    if(state.approvalLogTeamDir==='desc') teamNames.reverse();
     list.innerHTML = teamNames.map(team=>{
       const reqs = byTeam[team].slice().sort(approvalLogComparator);
       return `
