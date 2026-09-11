@@ -166,6 +166,9 @@
   .req-type-chip{
     font-size:11.5px; font-weight:800; padding:4px 10px; border-radius:20px; white-space:nowrap;
   }
+  /* 배지(연장근무/사후신청 등)가 1개든 2개든 하나의 묶음으로 붙어있게 해서, 카드 전체가
+     좁은 화면에서 줄바꿈될 때 배지 개수에 따라 레이아웃이 들쭉날쭉해지지 않게 한다. */
+  .req-chips{ display:flex; flex-direction:column; gap:6px; flex-shrink:0; align-items:flex-start; }
   .req-main{ flex:1; min-width:0; }
   .req-title-row{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
   .req-name{ font-weight:800; font-size:14.5px; }
@@ -1697,8 +1700,10 @@ function reqCardHTML(r, showActions, showApproverActions, note, showAdminCancel,
   const stampLabel = r.noApprovalNeeded? '등록완료' : (r.status==='approved'?'승인':(r.status==='rejected'?'반려':(r.status==='cancelled'?'취소됨':(r.status==='pending_hr'?'1차승인':'대기중'))));
   return `
   <div class="req-card">
-    <div class="req-type-chip" style="background:${t.soft}; color:${t.color};">${t.icon} ${t.label}</div>
-    ${r.isBackdated? `<div class="req-type-chip" style="background:var(--stamp-red-soft); color:var(--stamp-red);">🕘 사후신청</div>`:''}
+    <div class="req-chips">
+      <div class="req-type-chip" style="background:${t.soft}; color:${t.color};">${t.icon} ${t.label}</div>
+      ${r.isBackdated? `<div class="req-type-chip" style="background:var(--stamp-red-soft); color:var(--stamp-red);">🕘 사후신청</div>`:''}
+    </div>
     <div class="req-main">
       <div class="req-title-row">
         <span class="req-name">${empName(r.employeeId)}</span>
